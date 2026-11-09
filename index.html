@@ -82,8 +82,8 @@
   /* Tab bar */
   nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line);
     padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
-  nav div { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .tab { border: 0; background: none; font-size: 19px; text-transform: uppercase; color: var(--mute); min-height: 48px; }
+  nav div { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .tab { border: 0; background: none; font-size: 18px; text-transform: uppercase; color: var(--mute); min-height: 48px; padding: 0; }
   .tab[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); }
   /* Sheet (confirmations, swap picker, copy fallback) */
   #sheet { position: fixed; inset: 0; z-index: 20; background: rgba(8, 12, 20, .55); display: flex; align-items: flex-end; justify-content: center; }
@@ -94,11 +94,38 @@
   details li { margin-bottom: 6px; }
   summary { font-weight: 600; color: var(--ink); min-height: 44px; display: flex; align-items: center; cursor: pointer; }
   code { font-size: 13px; overflow-wrap: anywhere; }
+  /* Profile button, muscle toggles (new-exercise form), history */
+  #who { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mus { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .mus button { font-size: 14px; font-weight: 500; text-transform: capitalize; padding: 0 4px; display: flex; align-items: center; justify-content: center; }
+  .mus button[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
+  .days details ul { padding-left: 18px; margin: 0; }
 </style>
 
 <main>
-  <h1>Workout Log</h1>
+  <div class="between"><h1>Workout Log</h1><button id="who" type="button" hidden></button></div>
+  <p id="sync" class="hint" role="status" aria-live="polite"></p>
   <p id="warn" class="status err" role="alert"></p>
+  <div id="legacy" class="card" hidden>
+    <p id="legacyText"></p>
+    <div class="row">
+      <button id="legacyNo" type="button">No, leave them</button>
+      <button id="legacyYes" type="button">Add them</button>
+    </div>
+  </div>
+
+  <section id="vGate" hidden>
+    <div id="gmode" class="seg" role="group" aria-label="Sign in or make a profile"></div>
+    <form id="gform" class="card">
+      <label>Profile name <input id="gname" type="text" autocomplete="username" autocapitalize="words" maxlength="24"></label>
+      <label>Passcode <input id="gpass" type="password" autocomplete="current-password" maxlength="100"></label>
+      <label id="gjoinWrap" hidden>Join code <input id="gjoin" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+      <p id="ghint" class="hint"></p>
+      <button id="ggo" class="btn" type="submit">Sign in</button>
+    </form>
+    <p id="gstatus" class="status" role="status" aria-live="polite"></p>
+  </section>
+
   <div id="demo" class="card" hidden>
     <p class="hint">You are looking at example data. It clears itself when you save your first workout or import a CSV.</p>
     <button id="demoClear" type="button">Clear the examples now</button>
@@ -109,17 +136,6 @@
     <div id="metric" class="seg" role="group" aria-label="What to show"></div>
     <div id="key" class="card key"></div>
     <div id="charts" class="stack"></div>
-    <h2>Your data</h2>
-    <div class="card">
-      <p class="hint">Everything is stored in this browser on this phone only. Export now and then so you have a copy.</p>
-      <div class="row">
-        <button id="expLifts" type="button">Export lifts.csv</button>
-        <button id="expBw" type="button">Export body_weight.csv</button>
-      </div>
-      <label>Import a CSV (lifts or body weight) <input id="imp" type="file" accept=".csv,text/csv"></label>
-      <p id="dstatus" class="status" role="status" aria-live="polite"></p>
-      <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes.</p>
-    </div>
     <details>
       <summary>Where the numbers come from</summary>
       <ul>
@@ -145,7 +161,10 @@
       <label>Body weight <input id="tbody" type="text" inputmode="decimal" autocomplete="off" placeholder="optional"></label>
     </div>
     <label>Workout <select id="tworkout"></select></label>
+    <label id="tnameWrap" hidden>Session name <input id="tname" type="text" autocomplete="off" maxlength="80" placeholder="e.g. Hotel gym"></label>
+    <p id="tpast" class="hint"></p>
     <div id="tex" class="stack"></div>
+    <button id="tadd" type="button" hidden>Add an exercise</button>
     <p id="tstatus" class="status" role="status" aria-live="polite"></p>
     <button id="tsave" class="btn" type="button">Save workout</button>
   </section>
@@ -164,12 +183,43 @@
     <button id="bsave" class="btn" type="button">Save workout</button>
     <button id="bcancel" type="button" hidden>Cancel editing</button>
   </section>
+
+  <section id="vHistory" hidden>
+    <h2>Add past workouts</h2>
+    <div class="card">
+      <p class="hint">One day at a time: on the Train tab set the date, pick a workout or a one-off session, and add any exercise. If an exercise is not in the list you can add it to the exercise database on the spot.</p>
+      <button id="hpast" type="button">Log a past workout</button>
+      <label>Or import spreadsheet tabs saved as CSV (pick several at once) <input id="imp" type="file" accept=".csv,text/csv" multiple></label>
+      <p id="dstatus" class="status" role="status" aria-live="polite"></p>
+      <p class="hint">In Google Sheets: File → Download → Comma-separated values, once per tab. Lifts (date, workout, exercise, set, reps, weight_lb, notes), Body_Weight (date, body_weight_lb), Exercises (Exercise, Primary, Secondary, Equipment, Mechanic) and Workouts (one column per workout) are all understood.</p>
+    </div>
+    <div id="hunknown" class="stack"></div>
+    <h2>Logged days</h2>
+    <p id="hstatus" class="status" role="status" aria-live="polite"></p>
+    <ul id="hdays" class="list days"></ul>
+    <button id="hmore" type="button" hidden></button>
+    <h2>Exercises added to the database</h2>
+    <ul id="hcustom" class="list"></ul>
+    <button id="hnew" type="button">Add an exercise</button>
+    <h2>Your data</h2>
+    <div class="card">
+      <p id="hwhere" class="hint"></p>
+      <div class="row">
+        <button id="expLifts" type="button">Export lifts.csv</button>
+        <button id="expBw" type="button">Export body_weight.csv</button>
+      </div>
+      <button id="expEx" type="button">Export exercises.csv (the ones added here)</button>
+      <p id="estatus" class="status" role="status" aria-live="polite"></p>
+      <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes.</p>
+    </div>
+  </section>
 </main>
 
-<nav><div role="group" aria-label="Screen">
+<nav id="nav"><div role="group" aria-label="Screen">
   <button class="tab" id="tabTrends" type="button" aria-pressed="true">Trends</button>
   <button class="tab" id="tabTrain" type="button" aria-pressed="false">Train</button>
   <button class="tab" id="tabBuild" type="button" aria-pressed="false">Build</button>
+  <button class="tab" id="tabHistory" type="button" aria-pressed="false">History</button>
 </div></nav>
 
 <div id="sheet" hidden><div role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -179,12 +229,20 @@
 
 <script>
 'use strict';
+// The database: the URL of the Apps Script web app that fronts the Google Sheet (it ends in /exec; setup is in README.md).
+// Set to the deployed Apps Script web app URL. Leave empty for browser-only mode.
+const API_URL = 'https://script.google.com/macros/s/AKfycbxM-1M4mATyiitr0nvEes4RuE1CLCid-hcoC7Icwq6bUXpsRTeYuXBiqhIwW8S3kCh_qg/exec';
+const REMOTE = !!API_URL;
 const MUSCLES = ["abdominals","abductors","adductors","biceps","calves","chest","forearms","glutes","hamstrings","lats","lower back","middle back","neck","quadriceps","shoulders","traps","triceps"];
 const EQUIP = ["bands","barbell","body only","cable","dumbbell","e-z curl bar","exercise ball","foam roll","kettlebells","machine","medicine ball","none listed","other"];
 // [name, primary muscle indexes, secondary muscle indexes, equipment index] from free-exercise-db @ f00c92c
 const BANK = [["3/4 Sit-Up",[0],[],2],["90/90 Hamstring",[8],[4],2],["Ab Crunch Machine",[0],[],9],["Ab Roller",[0],[14],12],["Adductor",[2],[],7],["Adductor/Groin",[2],[],11],["Advanced Kettlebell Windmill",[0],[7,8,14],8],["Air Bike",[0],[],2],["All Fours Quad Stretch",[13],[],2],["Alternate Hammer Curl",[3],[6],4],["Alternate Heel Touchers",[0],[],2],["Alternate Incline Dumbbell Curl",[3],[6],4],["Alternate Leg Diagonal Bound",[13],[1,2,4,7,8],11],["Alternating Cable Shoulder Press",[14],[16],3],["Alternating Deltoid Raise",[14],[],4],["Alternating Floor Press",[5],[0,14,16],8],["Alternating Hang Clean",[8],[3,4,6,7,10,15],8],["Alternating Kettlebell Press",[14],[16],8],["Alternating Kettlebell Row",[11],[3,9],8],["Alternating Renegade Row",[11],[0,3,5,9,16],8],["Ankle Circles",[4],[],11],["Ankle On The Knee",[7],[],11],["Anterior Tibialis-SMR",[4],[],12],["Anti-Gravity Press",[14],[11,15,16],1],["Arm Circles",[14],[15],11],["Arnold Dumbbell Press",[14],[16],4],["Around The Worlds",[5],[14],4],["Atlas Stone Trainer",[10],[3,6,7,8,13],12],["Atlas Stones",[10],[0,2,3,4,6,7,8,11,13,15],12],["Axle Deadlift",[10],[6,7,8,11,13,15],12],["Back Flyes - With Bands",[14],[11,16],0],["Backward Drag",[13],[4,6,7,8,10],12],["Backward Medicine Ball Throw",[14],[],10],["Balance Board",[4],[8,13],12],["Ball Leg Curl",[8],[4,7],6],["Band Assisted Pull-Up",[9],[0,6,11],12],["Band Good Morning",[8],[7,10],0],["Band Good Morning (Pull Through)",[8],[7,10],0],["Band Hip Adductions",[2],[],0],["Band Pull Apart",[14],[11,15],0],["Band Skull Crusher",[16],[],0],["Barbell Ab Rollout",[0],[10,14],1],["Barbell Ab Rollout - On Knees",[0],[10,14],1],["Barbell Bench Press - Medium Grip",[5],[14,16],1],["Barbell Curl",[3],[6],1],["Barbell Curls Lying Against An Incline",[3],[],1],["Barbell Deadlift",[10],[4,6,7,8,9,11,13,15],1],["Barbell Full Squat",[13],[4,7,8,10],1],["Barbell Glute Bridge",[7],[4,8],1],["Barbell Guillotine Bench Press",[5],[14,16],1],["Barbell Hack Squat",[13],[4,6,8],1],["Barbell Hip Thrust",[7],[4,8],1],["Barbell Incline Bench Press - Medium Grip",[5],[14,16],1],["Barbell Incline Shoulder Raise",[14],[5],1],["Barbell Lunge",[13],[4,7,8],1],["Barbell Rear Delt Row",[14],[3,9,11],1],["Barbell Rollout from Bench",[0],[7,8,9,14],1],["Barbell Seated Calf Raise",[4],[],1],["Barbell Shoulder Press",[14],[5,16],1],["Barbell Shrug",[15],[],1],["Barbell Shrug Behind The Back",[15],[6,11],1],["Barbell Side Bend",[0],[10],1],["Barbell Side Split Squat",[13],[4,8,10],1],["Barbell Squat",[13],[4,7,8,10],1],["Barbell Squat To A Bench",[13],[4,7,8,10],1],["Barbell Step Ups",[13],[4,7,8],1],["Barbell Walking Lunge",[13],[4,7,8],1],["Battling Ropes",[14],[5,6],12],["Bear Crawl Sled Drags",[13],[4,7,8],12],["Behind Head Chest Stretch",[5],[14],12],["Bench Dips",[16],[5,14],2],["Bench Jump",[13],[4,7,8],2],["Bench Press - Powerlifting",[16],[5,6,9,14],1],["Bench Press - With Bands",[5],[14,16],0],["Bench Press with Chains",[16],[5,9,14],1],["Bench Sprint",[13],[4,7,8],12],["Bent-Arm Barbell Pullover",[9],[5,14,16],1],["Bent-Arm Dumbbell Pullover",[5],[9,14,16],4],["Bent-Knee Hip Raise",[0],[],2],["Bent Over Barbell Row",[11],[3,9,14],1],["Bent Over Dumbbell Rear Delt Raise With Head On Bench",[14],[],4],["Bent Over Low-Pulley Side Lateral",[14],[10,11,15],3],["Bent Over One-Arm Long Bar Row",[11],[3,9,10,15],1],["Bent Over Two-Arm Long Bar Row",[11],[3,9],1],["Bent Over Two-Dumbbell Row",[11],[3,9,14],4],["Bent Over Two-Dumbbell Row With Palms In",[11],[3,9],4],["Bent Press",[0],[7,8,10,13,14,16],8],["Bicycling",[13],[4,7,8],12],["Bicycling, Stationary",[13],[4,7,8],9],["Board Press",[16],[5,6,9,14],1],["Body-Up",[16],[0,6],2],["Body Tricep Press",[16],[],2],["Bodyweight Flyes",[5],[0,14,16],5],["Bodyweight Mid Row",[11],[3,9],12],["Bodyweight Squat",[13],[7,8],2],["Bodyweight Walking Lunge",[13],[4,7,8],11],["Bosu Ball Cable Crunch With Side Bends",[0],[],3],["Bottoms-Up Clean From The Hang Position",[6],[3,14],8],["Bottoms Up",[0],[],2],["Box Jump (Multiple Response)",[8],[1,2,4,7,13],12],["Box Skip",[8],[1,2,4,7,13],12],["Box Squat",[13],[2,4,7,8,10],1],["Box Squat with Bands",[13],[1,2,4,7,8,10],1],["Box Squat with Chains",[13],[1,2,4,7,8,10],1],["Brachialis-SMR",[3],[],7],["Bradford/Rocky Presses",[14],[16],1],["Butt-Ups",[0],[],2],["Butt Lift (Bridge)",[7],[8],2],["Butterfly",[5],[],9],["Cable Chest Press",[5],[14,16],3],["Cable Crossover",[5],[14],3],["Cable Crunch",[0],[],3],["Cable Deadlifts",[13],[6,7,8,10],3],["Cable Hammer Curls - Rope Attachment",[3],[],3],["Cable Hip Adduction",[13],[],3],["Cable Incline Pushdown",[9],[],3],["Cable Incline Triceps Extension",[16],[],3],["Cable Internal Rotation",[14],[],3],["Cable Iron Cross",[5],[],3],["Cable Judo Flip",[0],[],3],["Cable Lying Triceps Extension",[16],[],3],["Cable One Arm Tricep Extension",[16],[],3],["Cable Preacher Curl",[3],[6],3],["Cable Rear Delt Fly",[14],[],3],["Cable Reverse Crunch",[0],[],3],["Cable Rope Overhead Triceps Extension",[16],[],3],["Cable Rope Rear-Delt Rows",[14],[3,11],3],["Cable Russian Twists",[0],[],3],["Cable Seated Crunch",[0],[],3],["Cable Seated Lateral Raise",[14],[11,15],3],["Cable Shoulder Press",[14],[16],3],["Cable Shrugs",[15],[],3],["Cable Wrist Curl",[6],[],3],["Calf-Machine Shoulder Shrug",[15],[],9],["Calf Press",[4],[],9],["Calf Press On The Leg Press Machine",[4],[],9],["Calf Raise On A Dumbbell",[4],[],4],["Calf Raises - With Bands",[4],[],0],["Calf Stretch Elbows Against Wall",[4],[],11],["Calf Stretch Hands Against Wall",[4],[],11],["Calves-SMR",[4],[],7],["Car Deadlift",[13],[6,7,8,10,15],12],["Car Drivers",[14],[6],1],["Carioca Quick Step",[2],[0,1,4,7,8,13],11],["Cat Stretch",[10],[11,15],11],["Catch and Overhead Throw",[9],[0,5,14],10],["Chain Handle Extension",[16],[],12],["Chain Press",[5],[14,16],12],["Chair Leg Extended Stretch",[8],[2],12],["Chair Lower Back Stretch",[9],[10],11],["Chair Squat",[13],[4,7,8],9],["Chair Upper Body Stretch",[14],[3,5],12],["Chest And Front Of Shoulder Stretch",[5],[14],12],["Chest Push from 3 point stance",[5],[0,14,16],10],["Chest Push (multiple response)",[5],[0,14,16],10],["Chest Push (single response)",[5],[0,14,16],10],["Chest Push with Run Release",[5],[0,14,16],10],["Chest Stretch on Stability Ball",[5],[],6],["Child's Pose",[10],[7,11],11],["Chin-Up",[9],[3,6,11],2],["Chin To Chest Stretch",[12],[15],11],["Circus Bell",[14],[6,7,8,10,15,16],12],["Clean",[8],[4,6,7,10,13,14,15],1],["Clean Deadlift",[8],[6,7,10,11,13,15],1],["Clean Pull",[13],[6,7,8,10,15],1],["Clean Shrug",[15],[6,14],1],["Clean and Jerk",[14],[0,7,8,10,13,15,16],1],["Clean and Press",[14],[0,4,7,8,10,11,13,15,16],1],["Clean from Blocks",[13],[4,7,8,14,15],1],["Clock Push-Up",[5],[14,16],2],["Close-Grip Barbell Bench Press",[16],[5,14],1],["Close-Grip Dumbbell Press",[16],[5,14],4],["Close-Grip EZ-Bar Curl with Band",[3],[6],5],["Close-Grip EZ-Bar Press",[16],[5,14],5],["Close-Grip EZ Bar Curl",[3],[6],1],["Close-Grip Front Lat Pulldown",[9],[3,11,14],3],["Close-Grip Push-Up off of a Dumbbell",[16],[0,5,14],2],["Close-Grip Standing Barbell Curl",[3],[6],1],["Cocoons",[0],[],2],["Conan's Wheel",[13],[0,3,4,6,10,14,15],12],["Concentration Curls",[3],[6],4],["Cross-Body Crunch",[0],[],2],["Cross Body Hammer Curl",[3],[6],4],["Cross Over - With Bands",[5],[3,14],0],["Crossover Reverse Lunge",[10],[0,1,7,8,13],11],["Crucifix",[14],[6],12],["Crunch - Hands Overhead",[0],[],2],["Crunch - Legs On Exercise Ball",[0],[],2],["Crunches",[0],[],2],["Cuban Press",[14],[15],4],["Dancer's Stretch",[10],[1,7],11],["Dead Bug",[0],[],2],["Deadlift with Bands",[10],[6,7,8,11,13,15],1],["Deadlift with Chains",[10],[6,7,8,11,13,15],1],["Decline Barbell Bench Press",[5],[14,16],1],["Decline Close-Grip Bench To Skull Crusher",[16],[5,14],1],["Decline Crunch",[0],[],2],["Decline Dumbbell Bench Press",[5],[14,16],4],["Decline Dumbbell Flyes",[5],[],4],["Decline Dumbbell Triceps Extension",[16],[],4],["Decline EZ Bar Triceps Extension",[16],[],1],["Decline Oblique Crunch",[0],[],2],["Decline Push-Up",[5],[14,16],11],["Decline Reverse Crunch",[0],[],2],["Decline Smith Press",[5],[14,16],9],["Deficit Deadlift",[10],[6,7,8,11,13,15],1],["Depth Jump Leap",[13],[1,2,4,7,8],12],["Dip Machine",[16],[5,14],9],["Dips - Chest Version",[5],[14,16],12],["Dips - Triceps Version",[16],[5,14],2],["Donkey Calf Raises",[4],[],12],["Double Kettlebell Alternating Hang Clean",[8],[3,4,6,7,10,13,15],8],["Double Kettlebell Jerk",[14],[4,13,16],8],["Double Kettlebell Push Press",[14],[4,13,16],8],["Double Kettlebell Snatch",[14],[7,8,13],8],["Double Kettlebell Windmill",[0],[7,8,14,16],8],["Double Leg Butt Kick",[13],[1,2,4,7,8],2],["Downward Facing Balance",[7],[0,8],6],["Drag Curl",[3],[6],1],["Drop Push",[5],[14,16],12],["Dumbbell Alternate Bicep Curl",[3],[6],4],["Dumbbell Bench Press",[5],[14,16],4],["Dumbbell Bench Press with Neutral Grip",[5],[14,16],4],["Dumbbell Bicep Curl",[3],[6],4],["Dumbbell Clean",[8],[4,6,7,10,13,14,15],4],["Dumbbell Floor Press",[16],[5,14],4],["Dumbbell Flyes",[5],[],4],["Dumbbell Incline Row",[11],[3,6,9,14],4],["Dumbbell Incline Shoulder Raise",[14],[16],4],["Dumbbell Lunges",[13],[4,7,8],4],["Dumbbell Lying One-Arm Rear Lateral Raise",[14],[11],4],["Dumbbell Lying Pronation",[6],[],4],["Dumbbell Lying Rear Lateral Raise",[14],[],4],["Dumbbell Lying Supination",[6],[],4],["Dumbbell One-Arm Shoulder Press",[14],[16],4],["Dumbbell One-Arm Triceps Extension",[16],[],4],["Dumbbell One-Arm Upright Row",[14],[3,15],4],["Dumbbell Prone Incline Curl",[3],[],4],["Dumbbell Raise",[14],[3],4],["Dumbbell Rear Lunge",[13],[4,7,8],4],["Dumbbell Scaption",[14],[15],4],["Dumbbell Seated Box Jump",[13],[4,7,8],4],["Dumbbell Seated One-Leg Calf Raise",[4],[],4],["Dumbbell Shoulder Press",[14],[16],4],["Dumbbell Shrug",[15],[],4],["Dumbbell Side Bend",[0],[],4],["Dumbbell Squat",[13],[4,7,8,10],4],["Dumbbell Squat To A Bench",[13],[4,7,8,10],4],["Dumbbell Step Ups",[13],[4,7,8],4],["Dumbbell Tricep Extension -Pronated Grip",[16],[],4],["Dynamic Back Stretch",[9],[],11],["Dynamic Chest Stretch",[5],[11],11],["EZ-Bar Curl",[3],[],5],["EZ-Bar Skullcrusher",[16],[6],5],["Elbow Circles",[14],[15],11],["Elbow to Knee",[0],[],2],["Elbows Back",[5],[14],11],["Elevated Back Lunge",[13],[7,8],1],["Elevated Cable Rows",[9],[11,15],3],["Elliptical Trainer",[13],[4,7,8],9],["Exercise Ball Crunch",[0],[],6],["Exercise Ball Pull-In",[0],[],6],["Extended Range One-Arm Kettlebell Floor Press",[5],[14,16],8],["External Rotation",[14],[],4],["External Rotation with Band",[14],[],0],["External Rotation with Cable",[14],[],3],["Face Pull",[14],[11],3],["Farmer's Walk",[6],[0,7,8,10,13,15],12],["Fast Skipping",[13],[1,2,4,7,8],2],["Finger Curls",[6],[],1],["Flat Bench Cable Flyes",[5],[],3],["Flat Bench Leg Pull-In",[0],[],2],["Flat Bench Lying Leg Raise",[0],[],2],["Flexor Incline Dumbbell Curls",[3],[],4],["Floor Glute-Ham Raise",[8],[4,7],11],["Floor Press",[16],[5,14],1],["Floor Press with Chains",[16],[5,14],1],["Flutter Kicks",[7],[8],2],["Foot-SMR",[4],[],12],["Forward Drag with Press",[5],[4,7,8,13,14,16],12],["Frankenstein Squat",[13],[0,4,7,8],1],["Freehand Jump Squat",[13],[4,7,8],2],["Frog Hops",[13],[4,7,8],11],["Frog Sit-Ups",[0],[],2],["Front Barbell Squat",[13],[4,7,8],1],["Front Barbell Squat To A Bench",[13],[4,7,8],1],["Front Box Jump",[8],[1,2,4,7,13],12],["Front Cable Raise",[14],[],3],["Front Cone Hops (or hurdle hops)",[13],[1,2,4,7,8],12],["Front Dumbbell Raise",[14],[],4],["Front Incline Dumbbell Raise",[14],[],4],["Front Leg Raises",[8],[],2],["Front Plate Raise",[14],[],12],["Front Raise And Pullover",[5],[9,14,16],1],["Front Squat (Clean Grip)",[13],[0,7,8],1],["Front Squats With Two Kettlebells",[13],[4,7],8],["Front Two-Dumbbell Raise",[14],[],4],["Full Range-Of-Motion Lat Pulldown",[9],[3,11,14],3],["Gironda Sternum Chins",[9],[3,11],12],["Glute Ham Raise",[8],[4,7],9],["Glute Kickback",[7],[8],2],["Goblet Squat",[13],[4,7,8,14],8],["Good Morning",[8],[0,7,10],1],["Good Morning off Pins",[8],[0,7,10],1],["Gorilla Chin/Crunch",[0],[3,9],2],["Groin and Back Stretch",[2],[],11],["Groiners",[2],[],2],["Hack Squat",[13],[4,7,8],9],["Hammer Curls",[3],[],4],["Hammer Grip Incline DB Bench Press",[5],[14,16],4],["Hamstring-SMR",[8],[],7],["Hamstring Stretch",[8],[],11],["Handstand Push-Ups",[14],[16],2],["Hang Clean",[13],[4,6,7,8,10,14,15],1],["Hang Clean - Below the Knees",[13],[4,6,7,8,10,14,15],1],["Hang Snatch",[8],[0,4,6,7,10,13,14,15],1],["Hang Snatch - Below Knees",[8],[0,4,6,7,10,13,14,15],1],["Hanging Bar Good Morning",[8],[0,7,10],1],["Hanging Leg Raise",[0],[],2],["Hanging Pike",[0],[],2],["Heaving Snatch Balance",[13],[0,6,7,8,14,16],1],["Heavy Bag Thrust",[5],[0,14,16],12],["High Cable Curls",[3],[],3],["Hip Circles (prone)",[1],[2],2],["Hip Extension with Bands",[7],[8],0],["Hip Flexion with Band",[13],[],0],["Hip Lift with Band",[7],[4,8],0],["Hug A Ball",[10],[4,7],6],["Hug Knees To Chest",[10],[7],11],["Hurdle Hops",[8],[1,2,4,7],12],["Hyperextensions (Back Extensions)",[10],[7,8],12],["Hyperextensions With No Hyperextension Bench",[10],[7,8],2],["IT Band and Glute Stretch",[1],[],12],["Iliotibial Tract-SMR",[1],[],7],["Inchworm",[8],[],2],["Incline Barbell Triceps Extension",[16],[6],1],["Incline Bench Pull",[11],[9,14],1],["Incline Cable Chest Press",[5],[14,16],3],["Incline Cable Flye",[5],[14],3],["Incline Dumbbell Bench With Palms Facing In",[5],[14,16],4],["Incline Dumbbell Curl",[3],[],4],["Incline Dumbbell Flyes",[5],[14],4],["Incline Dumbbell Flyes - With A Twist",[5],[14],4],["Incline Dumbbell Press",[5],[14,16],4],["Incline Hammer Curls",[3],[],4],["Incline Inner Biceps Curl",[3],[],4],["Incline Push-Up",[5],[14,16],2],["Incline Push-Up Close-Grip",[16],[5,14],2],["Incline Push-Up Depth Jump",[5],[14,16],12],["Incline Push-Up Medium",[5],[0,14,16],2],["Incline Push-Up Reverse Grip",[5],[0,14,16],2],["Incline Push-Up Wide",[5],[0,14,16],2],["Intermediate Groin Stretch",[8],[],12],["Intermediate Hip Flexor and Quad Stretch",[13],[],12],["Internal Rotation with Band",[14],[],0],["Inverted Row",[11],[9],11],["Inverted Row with Straps",[11],[3,9],12],["Iron Cross",[14],[5,7,8,10,13,15],4],["Iron Crosses (stretch)",[13],[],11],["Isometric Chest Squeezes",[5],[14,16],2],["Isometric Neck Exercise - Front And Back",[12],[],2],["Isometric Neck Exercise - Sides",[12],[],2],["Isometric Wipers",[5],[0,14,16],2],["JM Press",[16],[5,14],1],["Jackknife Sit-Up",[0],[],2],["Janda Sit-Up",[0],[],2],["Jefferson Squats",[13],[4,7,8,10,15],1],["Jerk Balance",[14],[7,8,13,16],1],["Jerk Dip Squat",[13],[0,4],1],["Jogging, Treadmill",[13],[7,8],9],["Keg Load",[10],[0,3,4,6,7,8,11,13,14,15],12],["Kettlebell Arnold Press",[14],[16],8],["Kettlebell Dead Clean",[8],[4,7,10,13,15],8],["Kettlebell Figure 8",[0],[8,14],8],["Kettlebell Halo",[14],[15,11,0,16],8],["Kettlebell Halo with Overhead Extension",[14,16],[15,11,0],8],["Kettlebell Hang Clean",[8],[4,7,10,14,15],8],["Kettlebell One-Legged Deadlift",[8],[7,10],8],["Kettlebell Overhead Triceps Extension",[16],[14,0],8],["Kettlebell Pass Between The Legs",[0],[7,8,14],8],["Kettlebell Pirate Ships",[14],[0],8],["Kettlebell Pistol Squat",[13],[4,7,8,14],8],["Kettlebell Seated Press",[14],[16],8],["Kettlebell Seesaw Press",[14],[16],8],["Kettlebell Sumo High Pull",[15],[2,7,8,13,14],8],["Kettlebell Thruster",[14],[13,16],8],["Kettlebell Turkish Get-Up (Lunge style)",[14],[0,8,13,16],8],["Kettlebell Turkish Get-Up (Squat style)",[14],[0,4,8,13,16],8],["Kettlebell Windmill",[0],[7,8,14,16],8],["Kipping Muscle Up",[9],[0,3,6,11,14,15,16],12],["Knee Across The Body",[7],[1,10],11],["Knee Circles",[4],[8,13],2],["Knee/Hip Raise On Parallel Bars",[0],[],12],["Knee Tuck Jump",[8],[1,2,4,7,13],2],["Kneeling Arm Drill",[14],[0],11],["Kneeling Cable Crunch With Alternating Oblique Twists",[0],[],3],["Kneeling Cable Triceps Extension",[16],[],3],["Kneeling Forearm Stretch",[6],[],11],["Kneeling High Pulley Row",[9],[3,11],3],["Kneeling Hip Flexor",[13],[],11],["Kneeling Jump Squat",[7],[4,8,13],1],["Kneeling Single-Arm High Pulley Row",[9],[3,11],3],["Kneeling Squat",[7],[0,8,10],1],["Landmine 180's",[0],[7,10,14],1],["Landmine Linear Jammer",[14],[0,4,5,8,13,16],1],["Lateral Bound",[2],[1,4,7,8,13],2],["Lateral Box Jump",[2],[1,4,7,8,13],12],["Lateral Cone Hops",[2],[1,4,7,8,13],12],["Lateral Raise - With Bands",[14],[],0],["Latissimus Dorsi-SMR",[9],[],7],["Leg-Over Floor Press",[5],[14,16],8],["Leg-Up Hamstring Stretch",[8],[],11],["Leg Extensions",[13],[],9],["Leg Lift",[7],[8],2],["Leg Press",[13],[4,7,8],9],["Leg Pull-In",[0],[],2],["Leverage Chest Press",[5],[14,16],9],["Leverage Deadlift",[13],[7,8],9],["Leverage Decline Chest Press",[5],[14,16],9],["Leverage High Row",[11],[9],9],["Leverage Incline Chest Press",[5],[14,16],9],["Leverage Iso Row",[9],[3,11],9],["Leverage Shoulder Press",[14],[16],9],["Leverage Shrug",[15],[6],9],["Linear 3-Part Start Technique",[8],[4,13],11],["Linear Acceleration Wall Drill",[8],[4,7,13],11],["Linear Depth Jump",[13],[4,7,8],12],["Log Lift",[14],[0,5,7,8,10,11,13,15,16],12],["London Bridges",[9],[3,6,11],12],["Looking At Ceiling",[13],[],11],["Low Cable Crossover",[5],[14],3],["Low Cable Triceps Extension",[16],[],3],["Low Pulley Row To Neck",[14],[3,11,15],3],["Lower Back-SMR",[10],[],7],["Lower Back Curl",[0],[],2],["Lunge Pass Through",[8],[4,7,13],8],["Lunge Sprint",[13],[4,7,8],9],["Lying Bent Leg Groin",[2],[],12],["Lying Cable Curl",[3],[],3],["Lying Cambered Barbell Row",[11],[3,9,15],1],["Lying Close-Grip Bar Curl On High Pulley",[3],[],3],["Lying Close-Grip Barbell Triceps Extension Behind The Head",[16],[],1],["Lying Close-Grip Barbell Triceps Press To Chin",[16],[],5],["Lying Crossover",[1],[],2],["Lying Dumbbell Tricep Extension",[16],[5,14],4],["Lying Face Down Plate Neck Resistance",[12],[],12],["Lying Face Up Plate Neck Resistance",[12],[],12],["Lying Glute",[7],[1],2],["Lying Hamstring",[8],[4],12],["Lying High Bench Barbell Curl",[3],[],1],["Lying Leg Curls",[8],[],9],["Lying Machine Squat",[13],[4,7,8],9],["Lying One-Arm Lateral Raise",[14],[],4],["Lying Prone Quadriceps",[13],[],2],["Lying Rear Delt Raise",[14],[],4],["Lying Supine Dumbbell Curl",[3],[],4],["Lying T-Bar Row",[11],[3,9],9],["Lying Triceps Press",[16],[],5],["Machine Bench Press",[5],[14,16],9],["Machine Bicep Curl",[3],[],9],["Machine Preacher Curls",[3],[],9],["Machine Shoulder (Military) Press",[14],[16],9],["Machine Triceps Extension",[16],[],9],["Medicine Ball Chest Pass",[5],[14,16],10],["Medicine Ball Full Twist",[0],[14],10],["Medicine Ball Scoop Throw",[14],[0,8,13],10],["Middle Back Shrug",[11],[],4],["Middle Back Stretch",[11],[0,9,10],11],["Mixed Grip Chin",[11],[3,9],12],["Monster Walk",[1],[],0],["Mountain Climbers",[13],[5,8,14],11],["Moving Claw Series",[8],[4,13],11],["Muscle Snatch",[8],[7,10,13,14,16],1],["Muscle Up",[9],[0,3,6,11,14,15,16],12],["Narrow Stance Hack Squats",[13],[4,7,8],9],["Narrow Stance Leg Press",[13],[4,7,8],9],["Narrow Stance Squats",[13],[4,7,8,10],1],["Natural Glute Ham Raise",[8],[4,7,10],2],["Neck-SMR",[12],[],12],["Neck Press",[5],[14,16],1],["Oblique Crunches",[0],[],2],["Oblique Crunches - On The Floor",[0],[],2],["Olympic Squat",[13],[4,7,8],1],["On-Your-Back Quad Stretch",[13],[],12],["On Your Side Quad Stretch",[13],[],11],["One-Arm Dumbbell Row",[11],[3,9,14],4],["One-Arm Flat Bench Dumbbell Flye",[5],[],4],["One-Arm High-Pulley Cable Side Bends",[0],[],3],["One-Arm Incline Lateral Raise",[14],[],4],["One-Arm Kettlebell Clean",[8],[7,10,14,15],8],["One-Arm Kettlebell Clean and Jerk",[14],[],8],["One-Arm Kettlebell Floor Press",[5],[16],8],["One-Arm Kettlebell Jerk",[14],[4,13,16],8],["One-Arm Kettlebell Military Press To The Side",[14],[16],8],["One-Arm Kettlebell Para Press",[14],[16],8],["One-Arm Kettlebell Push Press",[14],[4,13,16],8],["One-Arm Kettlebell Row",[11],[3,9],8],["One-Arm Kettlebell Snatch",[14],[4,7,8,10,15,16],8],["One-Arm Kettlebell Split Jerk",[14],[7,8,13,16],8],["One-Arm Kettlebell Split Snatch",[14],[8,13],8],["One-Arm Kettlebell Swings",[8],[4,7,10,14],8],["One-Arm Long Bar Row",[11],[3,9],1],["One-Arm Medicine Ball Slam",[0],[9,14],10],["One-Arm Open Palm Kettlebell Clean",[8],[6,7,10,13,14],8],["One-Arm Overhead Kettlebell Squats",[13],[4,7,8,14],8],["One-Arm Side Deadlift",[13],[0,4,7,8,10,15],1],["One-Arm Side Laterals",[14],[],4],["One-Legged Cable Kickback",[7],[8],3],["One Arm Against Wall",[9],[],11],["One Arm Chin-Up",[11],[3,6,9],12],["One Arm Dumbbell Bench Press",[5],[14,16],4],["One Arm Dumbbell Preacher Curl",[3],[],4],["One Arm Floor Press",[16],[5,14],1],["One Arm Lat Pulldown",[9],[3,11],3],["One Arm Pronated Dumbbell Triceps Extension",[16],[],4],["One Arm Supinated Dumbbell Triceps Extension",[16],[],4],["One Half Locust",[13],[0,3,5],11],["One Handed Hang",[9],[3],12],["One Knee To Chest",[7],[8,10],11],["One Leg Barbell Squat",[13],[4,7,8],1],["Open Palm Kettlebell Clean",[8],[7,10,13,14],8],["Otis-Up",[0],[5,14,16],12],["Overhead Cable Curl",[3],[],3],["Overhead Lat",[9],[16],12],["Overhead Slam",[9],[],10],["Overhead Squat",[13],[0,4,7,8,10,14,16],1],["Overhead Stretch",[0],[5,6,9,16],11],["Overhead Triceps",[16],[9],2],["Pallof Press",[0],[5,14,16],3],["Pallof Press With Rotation",[0],[5,14,16],3],["Palms-Down Dumbbell Wrist Curl Over A Bench",[6],[],4],["Palms-Down Wrist Curl Over A Bench",[6],[],1],["Palms-Up Barbell Wrist Curl Over A Bench",[6],[],1],["Palms-Up Dumbbell Wrist Curl Over A Bench",[6],[],4],["Parallel Bar Dip",[16],[5,14],12],["Pelvic Tilt Into Bridge",[10],[],11],["Peroneals-SMR",[4],[],7],["Peroneals Stretch",[4],[],12],["Physioball Hip Bridge",[7],[8],6],["Pin Presses",[16],[5,6,9,11,14],1],["Piriformis-SMR",[7],[],7],["Plank",[0],[],2],["Plate Pinch",[6],[],12],["Plate Twist",[0],[],12],["Platform Hamstring Slides",[8],[7],12],["Plie Dumbbell Squat",[13],[0,4,7,8],4],["Plyo Kettlebell Pushups",[5],[14,16],8],["Plyo Push-up",[5],[14,16],2],["Posterior Tibialis Stretch",[4],[],12],["Power Clean",[8],[4,6,7,10,11,13,14,15,16],1],["Power Clean from Blocks",[8],[13],1],["Power Jerk",[13],[0,4,7,8,14,16],1],["Power Partials",[14],[],4],["Power Snatch",[8],[4,7,10,13,14,15,16],1],["Power Snatch from Blocks",[13],[4,6,7,8,10,14,15,16],1],["Power Stairs",[8],[2,4,7,10,13,14,15],12],["Preacher Curl",[3],[],1],["Preacher Hammer Dumbbell Curl",[3],[6],4],["Press Sit-Up",[0],[5,14,16],1],["Prone Manual Hamstring",[8],[],11],["Prowler Sprint",[8],[4,5,7,13,14],12],["Pull Through",[7],[8,10],3],["Pullups",[9],[3,11],2],["Push-Up Wide",[5],[0,14,16],2],["Push-Ups - Close Triceps Position",[16],[5,14],2],["Push-Ups With Feet Elevated",[5],[14,16],2],["Push-Ups With Feet On An Exercise Ball",[5],[14,16],6],["Push Press",[14],[13,16],1],["Push Press - Behind the Neck",[14],[4,13,16],1],["Push Up to Side Plank",[5],[0,14,16],2],["Pushups",[5],[14,16],2],["Pushups (Close and Wide Hand Positions)",[5],[14,16],2],["Pyramid",[10],[14],6],["Quad Stretch",[13],[],12],["Quadriceps-SMR",[13],[],7],["Quick Leap",[13],[4,8],12],["Rack Delivery",[14],[6,15],1],["Rack Pull with Bands",[10],[6,7,8,13,15],1],["Rack Pulls",[10],[6,7,8,15],1],["Rear Leg Raises",[13],[],2],["Recumbent Bike",[13],[4,7,8],9],["Return Push from Stance",[14],[5,16],10],["Reverse Band Bench Press",[16],[5,6,9,11,14],1],["Reverse Band Box Squat",[13],[1,2,4,6,7,8,10],1],["Reverse Band Deadlift",[10],[1,2,4,7,8,13],1],["Reverse Band Power Squat",[13],[2,4,7,8,10],1],["Reverse Band Sumo Deadlift",[8],[1,2,4,6,7,10,13,15],1],["Reverse Barbell Curl",[3],[6],1],["Reverse Barbell Preacher Curls",[3],[6],5],["Reverse Cable Curl",[3],[6],3],["Reverse Crunch",[0],[],2],["Reverse Flyes",[14],[],4],["Reverse Flyes With External Rotation",[14],[],4],["Reverse Grip Bent-Over Rows",[11],[3,9,14],1],["Reverse Grip Triceps Pushdown",[16],[],3],["Reverse Hyperextension",[8],[4,7],9],["Reverse Machine Flyes",[14],[],9],["Reverse Plate Curls",[3],[6],12],["Reverse Triceps Bench Press",[16],[5,14],1],["Rhomboids-SMR",[11],[15],7],["Rickshaw Carry",[6],[0,4,7,8,10,13,15],12],["Rickshaw Deadlift",[13],[6,7,8,10,15],12],["Ring Dips",[16],[5,14],12],["Rocket Jump",[13],[4,8],2],["Rocking Standing Calf Raise",[4],[],1],["Rocky Pull-Ups/Pulldowns",[9],[3,11,14],12],["Romanian Deadlift",[8],[4,7,10],1],["Romanian Deadlift from Deficit",[8],[6,7,10,15],1],["Rope Climb",[9],[3,6,11,14],12],["Rope Crunch",[0],[],3],["Rope Jumping",[13],[4,8],12],["Rope Straight-Arm Pulldown",[9],[],3],["Round The World Shoulder Stretch",[14],[3,5],12],["Rowing, Stationary",[13],[3,4,7,8,10,11],9],["Runner's Stretch",[8],[4],11],["Running, Treadmill",[13],[4,7,8],9],["Russian Twist",[0],[10],2],["Sandbag Load",[13],[0,3,4,6,7,8,10,11,14,15],12],["Scapular Pull-Up",[15],[9,11],11],["Scissor Kick",[0],[],2],["Scissors Jump",[13],[7,8],2],["Seated Band Hamstring Curl",[8],[],12],["Seated Barbell Military Press",[14],[16],1],["Seated Barbell Twist",[0],[],1],["Seated Bent-Over One-Arm Dumbbell Triceps Extension",[16],[],4],["Seated Bent-Over Rear Delt Raise",[14],[],4],["Seated Bent-Over Two-Arm Dumbbell Triceps Extension",[16],[],4],["Seated Biceps",[3],[5,14],2],["Seated Cable Rows",[11],[3,9,14],3],["Seated Cable Shoulder Press",[14],[16],3],["Seated Calf Raise",[4],[],9],["Seated Calf Stretch",[4],[8,10],11],["Seated Close-Grip Concentration Barbell Curl",[3],[],1],["Seated Dumbbell Curl",[3],[],4],["Seated Dumbbell Inner Biceps Curl",[3],[],4],["Seated Dumbbell Palms-Down Wrist Curl",[6],[],4],["Seated Dumbbell Palms-Up Wrist Curl",[6],[],4],["Seated Dumbbell Press",[14],[16],4],["Seated Flat Bench Leg Pull-In",[0],[],2],["Seated Floor Hamstring Stretch",[8],[4],11],["Seated Front Deltoid",[14],[5],2],["Seated Glute",[7],[2],2],["Seated Good Mornings",[10],[7],1],["Seated Hamstring",[8],[4],11],["Seated Hamstring and Calf Stretch",[8],[4],12],["Seated Head Harness Neck Resistance",[12],[],12],["Seated Leg Curl",[8],[],9],["Seated Leg Tucks",[0],[],2],["Seated One-Arm Dumbbell Palms-Down Wrist Curl",[6],[],4],["Seated One-Arm Dumbbell Palms-Up Wrist Curl",[6],[],4],["Seated One-arm Cable Pulley Rows",[11],[3,9,15],3],["Seated Overhead Stretch",[0],[],11],["Seated Palm-Up Barbell Wrist Curl",[6],[],1],["Seated Palms-Down Barbell Wrist Curl",[6],[],1],["Seated Side Lateral Raise",[14],[],4],["Seated Triceps Press",[16],[],4],["Seated Two-Arm Palms-Up Low-Pulley Wrist Curl",[6],[],3],["See-Saw Press (Alternating Side Press)",[14],[0,16],4],["Shotgun Row",[9],[3,11],3],["Shoulder Circles",[14],[15],11],["Shoulder Press - With Bands",[14],[16],0],["Shoulder Raise",[14],[9],11],["Shoulder Stretch",[14],[],11],["Side-Lying Floor Stretch",[9],[],11],["Side Bridge",[0],[14],2],["Side Hop-Sprint",[13],[1,2,4,8],12],["Side Jackknife",[0],[],2],["Side Lateral Raise",[14],[],4],["Side Laterals to Front Raise",[14],[15],4],["Side Leg Raises",[2],[],2],["Side Lying Groin Stretch",[2],[8],11],["Side Neck Stretch",[12],[],11],["Side Standing Long Jump",[13],[4,7,8],11],["Side To Side Chins",[9],[3,6,11,14],12],["Side Wrist Pull",[14],[6,9],11],["Side to Side Box Shuffle",[13],[1,2,4,8],12],["Single-Arm Cable Crossover",[5],[],3],["Single-Arm Linear Jammer",[14],[5,16],1],["Single-Arm Push-Up",[5],[14,16],2],["Single-Cone Sprint Drill",[13],[4,7,8],12],["Single-Leg High Box Squat",[13],[7,8],12],["Single-Leg Hop Progression",[13],[1,2,4,8],12],["Single-Leg Lateral Hop",[13],[1,2,4,8],12],["Single-Leg Leg Extension",[13],[],9],["Single-Leg Stride Jump",[13],[1,2,4,8],12],["Single Dumbbell Raise",[14],[6,15],4],["Single Leg Butt Kick",[13],[4,8],2],["Single Leg Glute Bridge",[7],[8],2],["Single Leg Push-off",[13],[4,8],12],["Sit-Up",[0],[],2],["Sit Squats",[13],[1,7,8],11],["Skating",[13],[1,2,4,7,8],12],["Sled Drag - Harness",[13],[4,7,8],12],["Sled Overhead Backward Walk",[14],[4,11,13],12],["Sled Overhead Triceps Extension",[16],[],12],["Sled Push",[13],[4,5,7,8,16],12],["Sled Reverse Flye",[14],[],12],["Sled Row",[11],[3,9],12],["Sledgehammer Swings",[0],[4,6,9,11,14],12],["Smith Incline Shoulder Raise",[14],[5],1],["Smith Machine Behind the Back Shrug",[15],[14],9],["Smith Machine Bench Press",[5],[14,16],9],["Smith Machine Bent Over Row",[11],[3,9,14],9],["Smith Machine Calf Raise",[4],[],9],["Smith Machine Close-Grip Bench Press",[16],[5,14],9],["Smith Machine Decline Press",[5],[14,16],9],["Smith Machine Hang Power Clean",[8],[7,10,13,14,15],9],["Smith Machine Hip Raise",[0],[],9],["Smith Machine Incline Bench Press",[5],[14,16],9],["Smith Machine Leg Press",[13],[4,7,8],9],["Smith Machine One-Arm Upright Row",[14],[3,15],9],["Smith Machine Overhead Shoulder Press",[14],[16],9],["Smith Machine Pistol Squat",[13],[4,7,8],9],["Smith Machine Reverse Calf Raises",[4],[],9],["Smith Machine Squat",[13],[4,7,8,10],9],["Smith Machine Stiff-Legged Deadlift",[8],[7,10],9],["Smith Machine Upright Row",[15],[3,11,14],9],["Smith Single-Leg Split Squat",[13],[4,7,8],9],["Snatch",[13],[3,7,8,10,14,15,16],1],["Snatch Balance",[13],[4,7,8,14,16],1],["Snatch Deadlift",[8],[6,7,10,13,15],1],["Snatch Pull",[8],[4,7,10,13,15],1],["Snatch Shrug",[15],[6,14],1],["Snatch from Blocks",[13],[4,6,7,8,10,14,15,16],1],["Speed Band Overhead Triceps",[16],[],0],["Speed Box Squat",[13],[4,7,8],1],["Speed Squats",[13],[4,7,8,10],1],["Spell Caster",[0],[7,14],4],["Spider Crawl",[0],[5,14,16],2],["Spider Curl",[3],[],5],["Spinal Stretch",[11],[9,10,12,15],11],["Split Clean",[13],[4,6,7,8,10,14,15],1],["Split Jerk",[13],[7,8,14,16],1],["Split Jump",[13],[4,7,8],2],["Split Snatch",[8],[4,6,7,10,13,14,15,16],1],["Split Squat with Dumbbells",[13],[7,8],4],["Split Squats",[8],[4,7,13],11],["Squat Jerk",[13],[4,7,8,14,16],1],["Squat with Bands",[13],[2,4,7,8,10],1],["Squat with Chains",[13],[2,4,7,8,10],1],["Squat with Plate Movers",[13],[1,2,4,7,8],1],["Squats - With Bands",[13],[4,7,8,10],0],["Stairmaster",[13],[4,7,8],9],["Standing Alternating Dumbbell Press",[14],[16],4],["Standing Barbell Calf Raise",[4],[],1],["Standing Barbell Press Behind Neck",[14],[16],1],["Standing Bent-Over One-Arm Dumbbell Triceps Extension",[16],[14],4],["Standing Bent-Over Two-Arm Dumbbell Triceps Extension",[16],[],4],["Standing Biceps Cable Curl",[3],[],3],["Standing Biceps Stretch",[3],[5,14],12],["Standing Bradford Press",[14],[16],1],["Standing Cable Chest Press",[5],[14,16],3],["Standing Cable Lift",[0],[14],3],["Standing Cable Wood Chop",[0],[14],3],["Standing Calf Raises",[4],[],9],["Standing Concentration Curl",[3],[6],4],["Standing Dumbbell Calf Raise",[4],[],4],["Standing Dumbbell Press",[14],[16],4],["Standing Dumbbell Reverse Curl",[3],[6],4],["Standing Dumbbell Straight-Arm Front Delt Raise Above Head",[14],[],4],["Standing Dumbbell Triceps Extension",[16],[],4],["Standing Dumbbell Upright Row",[15],[3,14],4],["Standing Elevated Quad Stretch",[13],[],12],["Standing Front Barbell Raise Over Head",[14],[],1],["Standing Gastrocnemius Calf Stretch",[4],[8],11],["Standing Hamstring and Calf Stretch",[8],[],12],["Standing Hip Circles",[1],[2],2],["Standing Hip Flexors",[13],[],11],["Standing Inner-Biceps Curl",[3],[],4],["Standing Lateral Stretch",[0],[],11],["Standing Leg Curl",[8],[],9],["Standing Long Jump",[13],[4,7,8],2],["Standing Low-Pulley Deltoid Raise",[14],[6],3],["Standing Low-Pulley One-Arm Triceps Extension",[16],[5,14],3],["Standing Military Press",[14],[16],1],["Standing Olympic Plate Hand Squeeze",[6],[3],12],["Standing One-Arm Cable Curl",[3],[],3],["Standing One-Arm Dumbbell Curl Over Incline Bench",[3],[],4],["Standing One-Arm Dumbbell Triceps Extension",[16],[5,14],4],["Standing Overhead Barbell Triceps Extension",[16],[14],1],["Standing Palm-In One-Arm Dumbbell Press",[14],[16],4],["Standing Palms-In Dumbbell Press",[14],[16],4],["Standing Palms-Up Barbell Behind The Back Wrist Curl",[6],[],1],["Standing Pelvic Tilt",[10],[7],11],["Standing Rope Crunch",[0],[],3],["Standing Soleus And Achilles Stretch",[4],[],11],["Standing Toe Touches",[8],[4],11],["Standing Towel Triceps Extension",[16],[],2],["Standing Two-Arm Overhead Throw",[14],[5,9],10],["Star Jump",[13],[4,7,8,14],2],["Step-up with Knee Raise",[7],[8,13],2],["Step Mill",[13],[4,7,8],9],["Stiff-Legged Barbell Deadlift",[8],[7,10],1],["Stiff-Legged Dumbbell Deadlift",[8],[7,10],4],["Stiff Leg Barbell Good Morning",[10],[7,8],1],["Stomach Vacuum",[0],[],2],["Straight-Arm Dumbbell Pullover",[5],[9,14,16],4],["Straight-Arm Pulldown",[9],[],3],["Straight Bar Bench Mid Rows",[11],[3,9],1],["Straight Raises on Incline Bench",[14],[15],1],["Stride Jump Crossover",[13],[1,2,4,8],12],["Sumo Deadlift",[8],[2,6,7,10,11,13,15],1],["Sumo Deadlift with Bands",[8],[2,6,7,10,11,13,15],1],["Sumo Deadlift with Chains",[8],[1,2,6,7,10,11,13,15],1],["Superman",[10],[7,8],2],["Supine Chest Throw",[16],[5,14],10],["Supine One-Arm Overhead Throw",[0],[5,9,14],10],["Supine Two-Arm Overhead Throw",[0],[5,9,14],10],["Suspended Fallout",[0],[5,10,14],12],["Suspended Push-Up",[5],[14,16],12],["Suspended Reverse Crunch",[0],[],12],["Suspended Row",[11],[3,9],12],["Suspended Split Squat",[13],[1,2,4,7,8],12],["Svend Press",[5],[6,14,16],12],["T-Bar Row with Handle",[11],[3,9],1],["Tate Press",[16],[5,14],4],["The Straddle",[8],[2,4],11],["Thigh Abductor",[1],[7],9],["Thigh Adductor",[2],[7,8],9],["Tire Flip",[13],[4,5,6,7,8,10,14,15,16],12],["Toe Touchers",[0],[],2],["Torso Rotation",[0],[],6],["Trail Running/Walking",[13],[4,7,8],11],["Trap Bar Deadlift",[13],[7,8],12],["Tricep Dumbbell Kickback",[16],[],4],["Tricep Side Stretch",[16],[14],11],["Triceps Overhead Extension with Rope",[16],[],3],["Triceps Pushdown",[16],[],3],["Triceps Pushdown - Rope Attachment",[16],[],3],["Triceps Pushdown - V-Bar Attachment",[16],[],3],["Triceps Stretch",[16],[9],11],["Tuck Crunch",[0],[],2],["Two-Arm Dumbbell Preacher Curl",[3],[],4],["Two-Arm Kettlebell Clean",[14],[4,7,8,10,15],8],["Two-Arm Kettlebell Jerk",[14],[4,13,16],8],["Two-Arm Kettlebell Military Press",[14],[16],8],["Two-Arm Kettlebell Row",[11],[3,9],8],["Underhand Cable Pulldowns",[9],[3,11,14],3],["Upper Back-Leg Grab",[8],[10,11],11],["Upper Back Stretch",[11],[],11],["Upright Barbell Row",[14],[15],1],["Upright Cable Row",[15],[14],3],["Upright Row - With Bands",[15],[14],0],["Upward Stretch",[14],[5,9],11],["V-Bar Pulldown",[9],[3,11,14],3],["V-Bar Pullup",[9],[3,11,14],2],["Vertical Swing",[8],[7,13,14],4],["Walking, Treadmill",[13],[4,7,8],9],["Weighted Ball Hyperextension",[10],[7,8,11],6],["Weighted Ball Side Bend",[0],[],6],["Weighted Bench Dip",[16],[5,14],12],["Weighted Crunches",[0],[],10],["Weighted Jump Squat",[13],[4,7,8,10],1],["Weighted Pull Ups",[9],[3,11],12],["Weighted Sissy Squat",[13],[4,7,8],1],["Weighted Sit-Ups - With Bands",[0],[],12],["Weighted Squat",[13],[4,7,8],12],["Wide-Grip Barbell Bench Press",[5],[14,16],1],["Wide-Grip Decline Barbell Bench Press",[5],[14,16],1],["Wide-Grip Decline Barbell Pullover",[5],[14,16],1],["Wide-Grip Lat Pulldown",[9],[3,11,14],3],["Wide-Grip Pulldown Behind The Neck",[9],[3,11,14],3],["Wide-Grip Rear Pull-Up",[9],[3,11,14],2],["Wide-Grip Standing Barbell Curl",[3],[],1],["Wide Stance Barbell Squat",[13],[4,7,8,10],1],["Wide Stance Stiff Legs",[8],[2,7,10],1],["Wind Sprints",[0],[],2],["Windmills",[1],[7,8,10],11],["World's Greatest Stretch",[8],[4,7,13],11],["Wrist Circles",[6],[],2],["Wrist Roller",[6],[14],12],["Wrist Rotations with Straight Bar",[6],[],1],["Yoke Walk",[13],[0,1,2,4,7,8,10],12],["Zercher Squats",[13],[4,7,8],1],["Zottman Curl",[3],[6],4],["Zottman Preacher Curl",[3],[6],4]].map(([name, p, s, e]) => ({ name, primary: p.map(i => MUSCLES[i]), secondary: s.map(i => MUSCLES[i]), equipment: EQUIP[e] }));
-const BY = new Map(BANK.map(e => [e.name.toLowerCase(), e]));
-const KEY = 'workoutlog.v5', DKEY = KEY + '.draft';
+const BUILTIN = new Set(BANK.map(e => e.name.toLowerCase()));
+let ALL = BANK, BY = new Map(); // ALL = exercises added to the database, then the built-in list; both rebuilt by reindex()
+const MECHANICS = ['', 'compound', 'isolation'];
+const KEY = 'workoutlog.v5', DKEY = KEY + '.draft'; // this browser's own data when there is no database
+const KEY6 = 'workoutlog.v6', SKEY = KEY6 + '.session', LKEY = KEY6 + '.legacy'; // with a database: one copy per profile, plus who is signed in
+const ONE_OFF = '+'; // workout names cannot start with +, so this never collides with one
 const SESSION_REF = 11, WEEK_REF = 10, SHOW_MAX = 30, MAX_SETS = 10;
 const FORMULA_START = /^[=+\-@]/; // a spreadsheet would read these as formulas when the CSV is opened
 const LIFT_COLS = ['date', 'workout', 'exercise', 'set', 'reps', 'weight', 'notes'], BW_COLS = ['date', 'weight'];
@@ -237,30 +295,41 @@ function toNum(v) {
 
 // ---------- Storage ----------
 
-let S = { lifts: [], bw: [], workouts: [], demo: false }; // lifts rows follow LIFT_COLS, bw rows follow BW_COLS
+const blank = () => ({ lifts: [], bw: [], workouts: [], exercises: [], outbox: [], demo: false });
+let S = blank();     // lifts rows follow LIFT_COLS, bw rows follow BW_COLS; exercises = the added ones; outbox = changes the database has not confirmed
 let D = null;        // the workout being logged, kept across reloads
 let canStore = true; // false = never write (storage blocked, or saved data unreadable and left untouched)
+let session = null;  // { profile, token } once signed in to the database
+
+const dataKey = () => (REMOTE ? `${KEY6}.data.${session.profile.toLowerCase()}` : KEY);
+const draftKey = () => (REMOTE ? `${KEY6}.draft.${session.profile.toLowerCase()}` : DKEY);
 
 function load() {
+  S = blank();
+  canStore = true;
   let text, draft;
   try {
-    text = localStorage.getItem(KEY);
-    draft = localStorage.getItem(DKEY);
+    text = localStorage.getItem(dataKey());
+    draft = localStorage.getItem(draftKey());
   } catch (err) {
     canStore = false;
-    say('warn', `This browser is blocking storage (${msgOf(err)}). You can look around, but nothing will be saved.`, 'err');
+    say('warn', REMOTE
+      ? `This browser is blocking storage (${msgOf(err)}). Saving to the database still works, but this device keeps no copy for when you are offline.`
+      : `This browser is blocking storage (${msgOf(err)}). You can look around, but nothing will be saved.`, 'err');
   }
   if (text == null) {
-    seed();
+    if (!REMOTE) seed();
   } else {
     try {
       const o = JSON.parse(text);
       if (!o || ![o.lifts, o.bw, o.workouts].every(Array.isArray)) throw new Error('unexpected shape');
-      S = o;
+      S = { ...blank(), ...o };
       if (S.demo) addExamples();
     } catch (err) {
       canStore = false;
-      say('warn', `Your saved data could not be read (${msgOf(err)}). It has been left untouched, and nothing new will be saved until that is fixed.`, 'err');
+      say('warn', REMOTE
+        ? `This device's copy of your data could not be read (${msgOf(err)}). It has been left untouched. Saving to the database still works, but this device keeps no offline copy until that is fixed.`
+        : `Your saved data could not be read (${msgOf(err)}). It has been left untouched, and nothing new will be saved until that is fixed.`, 'err');
     }
   }
   D = newDraft();
@@ -273,12 +342,16 @@ function load() {
       say('warn', `Your in-progress workout could not be restored (${msgOf(err)}).`, 'err');
     }
   }
+  reindex();
 }
 
 /** Example lifts and body weights are regenerated on load and never written to storage. */
 function persist() {
-  if (!canStore) throw new Error('Storage is unavailable, so this was not saved.');
-  localStorage.setItem(KEY, JSON.stringify(S.demo ? { ...S, lifts: [], bw: [] } : S));
+  if (!canStore) {
+    if (REMOTE) return; // the database is the real store; this device just keeps no offline copy
+    throw new Error('Storage is unavailable, so this was not saved.');
+  }
+  localStorage.setItem(dataKey(), JSON.stringify(S.demo ? { ...S, lifts: [], bw: [] } : S));
 }
 
 /** Applies a change and stores it; if storing fails the change is undone and the error is thrown. */
@@ -289,6 +362,7 @@ function commit(change) {
     persist();
   } catch (err) {
     S = JSON.parse(before);
+    reindex();
     throw err;
   }
 }
@@ -300,15 +374,68 @@ function clearExamples() {
   S.bw = [];
 }
 
-const newDraft = () => ({ date: today(), workout: '', body: '', items: [] });
+const newDraft = () => ({ date: today(), workout: '', oneOff: false, body: '', items: [] });
 const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(s => s.w || s.r));
 function saveDraft() {
   if (!canStore) return;
   try {
-    localStorage.setItem(DKEY, JSON.stringify(D));
+    localStorage.setItem(draftKey(), JSON.stringify(D));
   } catch (err) {
     say('tstatus', `Your in-progress entries could not be kept (${msgOf(err)}). Save the workout before leaving this screen.`, 'err');
   }
+}
+
+// ---------- Changes: every edit to the data is one of these, on this device and in the database alike ----------
+
+const byDate = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); // sort is stable, so set order within a day is kept
+const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function reindex() {
+  ALL = S.exercises.filter(e => !BUILTIN.has(e.name.toLowerCase())).map(e => ({ ...e, custom: true })).concat(BANK);
+  BY = new Map(ALL.map(e => [e.name.toLowerCase(), e]));
+}
+
+/**
+ * { t: 'lifts' | 'bw', rows }            add rows; exact repeats are skipped, so sending one twice is harmless
+ * { t: 'workouts', workouts }            replace the list of saved workouts
+ * { t: 'exercise', ex } / { t: 'delExercise', name }   add, change or remove an exercise that is not built in
+ * { t: 'delDay', date }                  remove that day's sets and body weight
+ * Returns the number of rows added for 'lifts' and 'bw'.
+ */
+function applyOp(op) {
+  if (op.t === 'lifts' || op.t === 'bw') {
+    const target = op.t === 'lifts' ? S.lifts : S.bw, seen = new Set(target.map(r => JSON.stringify(r)));
+    let added = 0;
+    op.rows.forEach(r => {
+      const k = JSON.stringify(r);
+      if (seen.has(k)) return;
+      seen.add(k);
+      target.push(r);
+      added++;
+    });
+    target.sort(byDate);
+    return added;
+  }
+  if (op.t === 'workouts') S.workouts = op.workouts.map(w => ({ name: w.name, items: w.items.map(x => ({ ex: x.ex, sets: x.sets })) }));
+  if (op.t === 'exercise') S.exercises = S.exercises.filter(e => !same(e.name, op.ex.name)).concat({ ...op.ex, mine: true });
+  if (op.t === 'delExercise') S.exercises = S.exercises.filter(e => !same(e.name, op.name));
+  if (op.t === 'delDay') {
+    S.lifts = S.lifts.filter(r => r[0] !== op.date);
+    S.bw = S.bw.filter(r => r[0] !== op.date);
+  }
+  reindex();
+}
+
+/** Makes the changes on this device, all or none, and queues them for the database when there is one. */
+function act(...ops) {
+  let out;
+  commit(() => {
+    if (ops.some(op => op.t === 'lifts' || op.t === 'bw')) clearExamples();
+    out = ops.map(applyOp);
+    if (REMOTE) S.outbox.push(...ops);
+  });
+  sync();
+  return out;
 }
 
 /** First run: three starter workouts plus marked example history so the charts show something. */
@@ -433,31 +560,318 @@ function ask(question, yes) {
   ], () => res(false)));
 }
 
-// ---------- Exercise picker (Build screen, and Swap on the Train screen) ----------
+// ---------- The database: profiles and syncing ----------
+
+async function api(body) {
+  let res, o;
+  try {
+    // Sent as plain text on purpose: that keeps it a "simple" request, and Apps Script cannot answer a CORS preflight.
+    res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+  } catch (err) {
+    throw Object.assign(new Error(`Could not reach the database (${msgOf(err)}).`), { code: 'offline' });
+  }
+  try {
+    o = await res.json();
+  } catch (err) {
+    throw Object.assign(new Error(`The database sent a reply that could not be read (HTTP ${res.status}).`), { code: 'server' });
+  }
+  if (!o || !o.ok) throw Object.assign(new Error((o && o.error) || 'The database sent an empty reply.'), { code: (o && o.code) || 'server' });
+  return o;
+}
+
+const net = { busy: false, again: false, err: '' };
+
+/** Uploads the queued changes, then replaces this device's copy with what the database holds. One request at a time. */
+async function sync() {
+  if (!REMOTE || !session) return;
+  if (net.busy) { net.again = true; return; }
+  net.busy = true;
+  net.again = false;
+  drawSync();
+  const who = session, sent = Math.min(S.outbox.length, 100);
+  try {
+    const res = await api({ action: 'sync', token: who.token, ops: S.outbox.slice(0, sent) });
+    if (session !== who) return; // signed out while the request was in the air
+    const later = S.outbox.slice(sent); // changes made while the request was in the air: put them back on top
+    S = { ...blank(), lifts: res.lifts, bw: res.bw, workouts: res.workouts, exercises: res.exercises, synced: Date.now() };
+    reindex();
+    later.forEach(op => { applyOp(op); S.outbox.push(op); });
+    net.err = '';
+    net.again = net.again || later.length > 0;
+    try {
+      persist();
+    } catch (err) {
+      net.err = `Saved to the database, but this device could not keep its copy (${msgOf(err)}).`;
+    }
+    if (res.rejected.length) say('warn', `The database did not accept ${res.rejected.length} change(s), so they were dropped: ${res.rejected.map(r => r.why).join(' ')}`, 'err');
+    refresh();
+  } catch (err) {
+    if (session !== who) return;
+    if (err.code === 'auth') { reSignIn(); return; }
+    net.err = msgOf(err);
+  } finally {
+    net.busy = false;
+    drawSync();
+    if (net.again && session) sync();
+  }
+}
+
+function drawSync() {
+  const n = session ? S.outbox.length : 0, waiting = n ? `${n} change(s) waiting to upload. ` : '';
+  $('sync').textContent = !REMOTE || !session ? ''
+    : net.busy ? `${waiting}Syncing with the database…`
+    : net.err ? `${waiting}${net.err} It will try again when you reopen the page or come back online; tap your name to retry now.`
+    : n ? waiting
+    : S.synced ? `Saved to the database. Last synced ${new Date(S.synced).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}.` : '';
+}
+
+/** Redraws everything after the data changed, without pulling a field out from under someone typing on the Train tab. */
+function refresh() {
+  if (B.editing != null && !S.workouts[B.editing]) B.editing = null;
+  const a = document.activeElement;
+  if (!(a && $('vTrain').contains(a) && /^(INPUT|SELECT)$/.test(a.tagName))) drawTrain();
+  drawBuild();
+  buildPicker.redraw();
+  drawHistory();
+  drawSync();
+  if (!$('vTrends').hidden) drawTrends();
+}
+
+/** Shows the sign-in screen, or loads the signed-in profile (or this browser's own data when there is no database). */
+function enter() {
+  ['warn', 'tstatus', 'bstatus', 'dstatus', 'hstatus', 'estatus', 'gstatus'].forEach(id => say(id, ''));
+  $('who').hidden = !session;
+  $('who').textContent = session ? session.profile : '';
+  if (session) $('who').setAttribute('aria-label', `Profile ${session.profile}: sync and sign out`);
+  if (REMOTE && !session) {
+    drawGate();
+    drawSync();
+    drawLegacy();
+    return setView('Gate');
+  }
+  load();
+  B.editing = null;
+  B.items = [];
+  $('bname').value = '';
+  hist.shown = 20;
+  refresh();
+  drawLegacy();
+  setView('Trends');
+  sync();
+}
+
+const gate = { mode: 'login', busy: false };
+function drawGate() {
+  const fresh = gate.mode === 'signup';
+  $('gmode').replaceChildren(...[['Sign in', 'login'], ['New profile', 'signup']].map(([text, mode]) => h('button', {
+    type: 'button', 'aria-pressed': String(gate.mode === mode),
+    onclick: () => { gate.mode = mode; say('gstatus', ''); drawGate(); },
+  }, text)));
+  $('gjoinWrap').hidden = !fresh;
+  $('gpass').autocomplete = fresh ? 'new-password' : 'current-password';
+  $('ghint').textContent = fresh
+    ? 'Each profile has its own workouts, sets and body weight, kept apart from everyone else’s. The join code comes from the person who runs this log. A forgotten passcode can only be reset by that person, so pick one you will remember.'
+    : 'Sign in to your profile. Your data lives in the shared database, so it follows you to any phone or computer.';
+  $('ggo').textContent = gate.busy ? 'One moment…' : fresh ? 'Make profile' : 'Sign in';
+  $('ggo').disabled = gate.busy;
+}
+
+async function submitGate(ev) {
+  ev.preventDefault();
+  if (gate.busy) return;
+  const profile = $('gname').value.trim(), passcode = $('gpass').value;
+  if (!profile || !passcode) return say('gstatus', 'Enter a profile name and a passcode.', 'err');
+  gate.busy = true;
+  drawGate();
+  say('gstatus', '');
+  try {
+    const res = await api({ action: gate.mode, profile, passcode, join: $('gjoin').value.trim() });
+    session = { profile: res.profile, token: res.token };
+    try {
+      localStorage.setItem(SKEY, JSON.stringify(session));
+    } catch (err) { /* storage is blocked: signed in until the page closes; load() explains */ }
+    $('gpass').value = '';
+    $('gjoin').value = '';
+    gate.busy = false;
+    enter();
+  } catch (err) {
+    gate.busy = false;
+    drawGate();
+    say('gstatus', msgOf(err), 'err');
+  }
+}
+
+function readSession() {
+  try {
+    const o = JSON.parse(localStorage.getItem(SKEY));
+    return o && typeof o.profile === 'string' && typeof o.token === 'string' ? o : null;
+  } catch (err) {
+    return null; // blocked or unreadable: ask to sign in
+  }
+}
+
+/** The database no longer accepts the saved sign-in. Unsent changes stay on this device until the profile signs in again. */
+function reSignIn() {
+  const name = session.profile;
+  try {
+    localStorage.removeItem(SKEY);
+  } catch (err) { /* storage is blocked, so nothing was stored */ }
+  session = null;
+  enter();
+  $('gname').value = name;
+  say('gstatus', 'Please sign in again to keep syncing. Nothing on this device was lost.', 'err');
+}
+
+function profileSheet() {
+  const n = S.outbox.length;
+  openSheet(session.profile, [
+    h('p', {}, $('sync').textContent || 'Not synced yet.'),
+    h('button', { type: 'button', onclick: () => { closeSheet(); sync(); } }, 'Sync now'),
+    h('button', { type: 'button', class: 'danger', onclick: signOut }, 'Sign out or switch profile'),
+    h('p', { class: 'hint' }, n
+      ? `${n} change(s) have not reached the database yet. If you sign out now they stay on this device and upload the next time ${session.profile} signs in here.`
+      : 'Signing out removes this profile’s copy from this device. Everything stays in the database.'),
+  ]);
+}
+
+function signOut() {
+  closeSheet();
+  try {
+    if (!S.outbox.length) localStorage.removeItem(dataKey());
+    if (!typed(D)) localStorage.removeItem(draftKey());
+    localStorage.removeItem(SKEY);
+  } catch (err) { /* storage is blocked, so nothing was stored */ }
+  session = null;
+  net.err = '';
+  enter();
+}
+
+/** What this browser saved before there was a database, if it is real data nobody has dealt with yet. */
+function deviceData() {
+  try {
+    if (localStorage.getItem(LKEY)) return null;
+    const o = JSON.parse(localStorage.getItem(KEY));
+    return o && !o.demo && [o.lifts, o.bw, o.workouts].every(Array.isArray) && o.lifts.length + o.bw.length ? o : null;
+  } catch (err) {
+    return null; // blocked or unreadable: nothing to offer
+  }
+}
+function drawLegacy() {
+  const o = REMOTE && session ? deviceData() : null;
+  $('legacy').hidden = !o;
+  if (o) $('legacyText').textContent = `This device holds ${o.lifts.length} set(s) and ${o.bw.length} body-weight entr${o.bw.length === 1 ? 'y' : 'ies'} saved before profiles existed. Add them to ${session.profile}?`;
+}
+function settleLegacy(add) {
+  try {
+    const o = deviceData();
+    if (add && o) {
+      const mine = new Set(S.workouts.map(w => w.name.toLowerCase()));
+      act({ t: 'lifts', rows: o.lifts }, { t: 'bw', rows: o.bw },
+        ...(o.exercises || []).map(e => ({ t: 'exercise', ex: { name: e.name, primary: e.primary, secondary: e.secondary, equipment: e.equipment, mechanic: e.mechanic || '' } })),
+        { t: 'workouts', workouts: S.workouts.concat(o.workouts.filter(w => !mine.has(w.name.toLowerCase()))) });
+    }
+    localStorage.setItem(LKEY, 'done'); // the old data itself is left where it is
+    refresh();
+  } catch (err) {
+    say('warn', `Could not settle the older data: ${msgOf(err)}`, 'err');
+  }
+  drawLegacy();
+}
+
+// ---------- Exercise picker (Build screen; Swap and Add on the Train screen) ----------
 
 const chips = (e, words) => h('span', { class: 'chips' },
   e.primary.map(m => h('span', {}, h('i', { class: 'dot' }), words ? `${m} · primary` : m)),
   e.secondary.map(m => h('span', {}, h('i', { class: 'dot s' }), words ? `${m} · secondary` : m)));
 
 function picker(id, onPick, muscle) {
-  const q = h('input', { id: id + 'q', type: 'search', autocomplete: 'off', placeholder: `Search ${BANK.length} exercises`, 'aria-label': 'Search exercises' });
+  const q = h('input', { id: id + 'q', type: 'search', autocomplete: 'off', 'aria-label': 'Search exercises' });
   const m = h('select', { id: id + 'm', 'aria-label': 'Primary muscle' }, new Option('All muscles', ''), MUSCLES.map(x => new Option(x, x)));
   const eq = h('select', { id: id + 'e', 'aria-label': 'Equipment' }, new Option('All equipment', ''), EQUIP.map(x => new Option(x, x)));
   const count = h('p', { class: 'hint' }), list = h('ul', { class: 'list' });
   m.value = muscle || '';
   const draw = () => {
-    const text = q.value.trim().toLowerCase();
-    const hits = BANK.filter(e => (!text || e.name.toLowerCase().includes(text)) &&
+    const typedName = q.value.trim().replace(/\s+/g, ' '), text = typedName.toLowerCase();
+    const hits = ALL.filter(e => (!text || e.name.toLowerCase().includes(text)) &&
       (!m.value || e.primary.includes(m.value)) && (!eq.value || e.equipment === eq.value));
+    q.placeholder = `Search ${ALL.length} exercises`;
     count.textContent = hits.length > SHOW_MAX
       ? `Showing ${SHOW_MAX} of ${hits.length}. Narrow the search to see the rest.`
       : `${hits.length} match(es). Tap to choose.`;
     list.replaceChildren(...hits.slice(0, SHOW_MAX).map(e => h('li', {},
-      h('button', { type: 'button', class: 'pick', onclick: () => onPick(e) }, e.name, chips(e), h('span', { class: 'hint' }, e.equipment)))));
+      h('button', { type: 'button', class: 'pick', onclick: () => onPick(e) }, e.name, chips(e), h('span', { class: 'hint' }, e.custom ? `${e.equipment} · added` : e.equipment)))),
+      h('li', {}, h('button', { type: 'button', class: 'pick', onclick: async () => {
+        const made = await exerciseForm({ name: BY.has(text) ? '' : typedName });
+        if (made) onPick(made);
+      } }, text && !BY.has(text) ? `Add “${typedName}” as a new exercise` : 'Add an exercise that is not listed',
+      h('span', { class: 'hint' }, 'You say which muscles it trains, and it joins the exercise database.'))));
   };
   [q, m, eq].forEach(x => x.addEventListener('input', draw));
   draw();
-  return h('div', { class: 'stack' }, q, h('div', { class: 'row' }, m, eq), count, list);
+  return Object.assign(h('div', { class: 'stack' }, q, h('div', { class: 'row' }, m, eq), count, list), { redraw: draw });
+}
+
+/**
+ * Adds or edits an exercise that is not in the built-in list. `lock` fixes the name (editing, or naming one that is
+ * already in the history). Resolves with the saved exercise, or null if the sheet is closed.
+ */
+function exerciseForm({ name = '', primary = [], secondary = [], equipment = 'machine', mechanic = '', lock = false }) {
+  return new Promise(done => {
+    const tags = {}, NEXT = { '': 'p', p: 's', s: '' }, WORD = { '': 'not used', p: 'primary', s: 'secondary' };
+    primary.forEach(m => { tags[m] = 'p'; });
+    secondary.forEach(m => { tags[m] = 's'; });
+    const nameIn = h('input', { id: 'xname', type: 'text', autocomplete: 'off', maxLength: 80, value: name, readOnly: lock });
+    const buttons = MUSCLES.map(m => {
+      const dot = h('i', { class: 'dot' });
+      return { m, dot, b: h('button', { type: 'button', onclick: () => { tags[m] = NEXT[tags[m] || '']; paint(); } }, dot, m) };
+    });
+    const paint = () => buttons.forEach(({ m, dot, b }) => {
+      dot.hidden = !tags[m];
+      dot.className = tags[m] === 's' ? 'dot s' : 'dot';
+      b.setAttribute('aria-pressed', String(!!tags[m]));
+      b.setAttribute('aria-label', `${m}: ${WORD[tags[m] || '']}`);
+    });
+    const eq = h('select', { id: 'xequip' }, EQUIP.map(x => new Option(x, x)));
+    const mech = h('select', { id: 'xmech' }, new Option('not sure', ''), new Option('compound (several joints)', 'compound'), new Option('isolation (one joint)', 'isolation'));
+    const status = h('p', { class: 'status', role: 'status' });
+    const stop = why => { status.textContent = why; status.className = 'status err'; };
+    eq.value = equipment;
+    mech.value = mechanic;
+    paint();
+    const save = () => {
+      const title = nameIn.value.trim().replace(/\s+/g, ' '), had = S.exercises.find(e => same(e.name, title));
+      const pri = MUSCLES.filter(m => tags[m] === 'p'), sec = MUSCLES.filter(m => tags[m] === 's');
+      if (!title) return stop('Enter the exercise name.');
+      if (FORMULA_START.test(title)) return stop('The name can\'t start with = + - or @.');
+      if (BUILTIN.has(title.toLowerCase())) return stop(`“${title}” is already in the built-in list. Search for it instead.`);
+      if (had && !had.mine) return stop(`“${title}” was already added by someone else, so it can't be changed from this profile.`);
+      if (!pri.length) return stop('Tap at least one muscle once to mark it primary.');
+      try {
+        act({ t: 'exercise', ex: { name: title, primary: pri, secondary: sec, equipment: eq.value, mechanic: mech.value } });
+      } catch (err) {
+        return stop(`Not saved: ${msgOf(err)}`);
+      }
+      closeSheet();
+      refresh();
+      done(BY.get(title.toLowerCase()));
+    };
+    openSheet(lock && primary.length ? 'Edit exercise' : 'New exercise', [
+      h('label', {}, 'Exercise name', nameIn),
+      h('p', { class: 'hint' }, 'Muscles: tap once for primary (each set counts 1), twice for secondary (each set counts ½), a third time to clear.'),
+      h('div', { class: 'mus', role: 'group', 'aria-label': 'Muscles' }, buttons.map(x => x.b)),
+      h('div', { class: 'row' }, h('label', {}, 'Equipment', eq), h('label', {}, 'Mechanic', mech)),
+      status,
+      h('button', { type: 'button', class: 'btn', onclick: save }, 'Save to the exercise database'),
+    ], () => done(null));
+  });
+}
+
+/** Exercises that are in the history but not in the database, each with a button to add it. */
+function unknownBox(names) {
+  return h('div', { class: 'card' },
+    h('p', {}, 'These exercises are in your history but not in the exercise database, so the muscle charts leave them out. Add each one and say which muscles it trains:'),
+    names.slice(0, 12).map(n => h('button', { type: 'button', onclick: () => exerciseForm({ name: n, lock: true }) }, `Add “${n}”`)),
+    names.length > 12 && h('p', { class: 'hint' }, `…and ${names.length - 12} more after these.`));
 }
 
 // ---------- Trends ----------
@@ -573,8 +987,7 @@ function drawTrends() {
   if (bw.length) cards.push(trendCard('Body weight', t, pick => lineChart(t.body, Math.min(...bw), Math.max(...bw), null, pick), i => ({
     num: t.body[i] == null ? '–' : fmt(t.body[i]), parts: [h('span', {}, t.body[i] == null ? 'not logged' : 'weekly average')],
   })));
-  if (t.unknown.length) cards.push(h('p', { class: 'status err' },
-    `Not in the exercise list, so not counted in these charts: ${t.unknown.join(', ')}.`));
+  if (t.unknown.length) cards.push(unknownBox(t.unknown));
   $('charts').replaceChildren(...cards);
   $('demo').hidden = !S.demo;
 }
@@ -583,13 +996,18 @@ function drawTrends() {
 
 function drawTrain() {
   const names = S.workouts.map(w => w.name);
-  if (D.workout && !names.includes(D.workout)) names.push(D.workout); // edited or deleted since this workout was started
-  $('tworkout').replaceChildren(new Option(names.length ? 'Pick a workout' : 'No workouts yet: make one on the Build tab', ''), ...names.map(n => new Option(n, n)));
-  $('tworkout').value = D.workout;
+  if (D.workout && !D.oneOff && !names.includes(D.workout)) names.push(D.workout); // edited or deleted since this workout was started
+  $('tworkout').replaceChildren(new Option(names.length ? 'Pick a workout' : 'No workouts yet: make one on the Build tab, or log a one-off', ''),
+    ...names.map(n => new Option(n, n)), new Option('One-off session (no saved workout)', ONE_OFF));
+  $('tworkout').value = D.oneOff ? ONE_OFF : D.workout;
+  $('tnameWrap').hidden = !D.oneOff;
+  $('tname').value = D.oneOff ? D.workout : '';
   $('tdate').value = D.date;
   $('tbody').value = D.body;
+  $('tpast').textContent = isDate(D.date) && D.date < today() ? `Logging a past day: ${longDate(D.date)}.` : '';
   const st = stats();
   $('tex').replaceChildren(...D.items.map((it, i) => exerciseCard(it, i, st(it.ex))));
+  $('tadd').hidden = !D.oneOff && !D.workout;
   $('tsave').hidden = !D.items.length;
 }
 
@@ -608,8 +1026,10 @@ function exerciseCard(it, i, hist) {
   });
   return h('article', { class: 'card' },
     h('div', { class: 'between' }, h('h3', { style: 'text-transform:none' }, it.ex),
-      h('button', { type: 'button', 'aria-label': `Swap ${it.ex} for another exercise`, onclick: () => swap(it, e) }, 'Swap')),
-    e ? chips(e, true) : h('p', { class: 'hint' }, 'Not in the exercise list, so it has no muscle tags.'),
+      h('div', { class: 'acts' },
+        h('button', { type: 'button', 'aria-label': `Swap ${it.ex} for another exercise`, onclick: () => swap(it, e) }, 'Swap'),
+        h('button', { type: 'button', class: 'mini', 'aria-label': `Remove ${it.ex} from this session`, onclick: () => dropItem(it) }, '✕'))),
+    e ? chips(e, true) : h('button', { type: 'button', onclick: () => exerciseForm({ name: it.ex, lock: true }) }, 'Not in the exercise database yet: add its muscles'),
     hist
       ? h('p', { class: 'target' }, `Best ${hist.pr.weight} × ${hist.pr.reps} (${hist.pr.date}) · Target `, h('b', {}, `${hist.pr.weight} × ${hist.pr.reps + 1}`))
       : h('p', { class: 'hint' }, 'No history yet. Your first session sets the target.'),
@@ -639,8 +1059,30 @@ function swap(it, e) {
   ]);
 }
 
+/** Add for this session only: as many sets as last time, or 3. */
+function addToSession() {
+  openSheet('Add an exercise', [
+    h('p', { class: 'hint' }, 'This session only. Your saved workout stays as it is.'),
+    picker('ad', x => {
+      const past = stats()(x.name), n = past ? Math.min(MAX_SETS, Math.max(1, past.last.sets.length)) : 3;
+      D.items.push({ ex: x.name, notes: '', sets: Array.from({ length: n }, () => ({ w: '', r: '' })) });
+      saveDraft();
+      closeSheet();
+      drawTrain();
+    }),
+  ]);
+}
+
+async function dropItem(it) {
+  if ((it.notes || it.sets.some(s => s.w || s.r)) && !await ask(`Remove ${it.ex} and what you typed for it?`, 'Remove')) return;
+  D.items.splice(D.items.indexOf(it), 1);
+  saveDraft();
+  drawTrain();
+}
+
 function pickWorkout() {
   const w = S.workouts.find(x => x.name === $('tworkout').value);
+  D.oneOff = $('tworkout').value === ONE_OFF;
   D.workout = w ? w.name : '';
   D.items = w ? w.items.map(x => ({ ex: x.ex, notes: '', sets: Array.from({ length: x.sets }, () => ({ w: '', r: '' })) })) : [];
   say('tstatus', '');
@@ -651,9 +1093,10 @@ function pickWorkout() {
 /** Validates the whole entry first; saves all of it or none of it. */
 async function saveSession() {
   try {
-    const date = D.date, body = toNum(D.body);
+    const date = D.date, body = toNum(D.body), workout = D.workout.trim();
     if (!isDate(date)) return say('tstatus', 'Date is missing or not a date.', 'err');
-    if (!D.workout) return say('tstatus', 'Pick a workout.', 'err');
+    if (!workout) return say('tstatus', D.oneOff ? 'Enter a session name.' : 'Pick a workout.', 'err');
+    if (FORMULA_START.test(workout)) return say('tstatus', 'The session name can\'t start with = + - or @.', 'err');
     if (body !== '' && (typeof body !== 'number' || body <= 0)) return say('tstatus', 'Body weight must be a positive number.', 'err');
     const out = [], errors = [];
     D.items.forEach(it => it.sets.forEach((s, j) => {
@@ -662,7 +1105,7 @@ async function saveSession() {
       if (typeof w !== 'number' || w < 0 || typeof reps !== 'number' || reps <= 0 || !Number.isInteger(reps)) {
         return errors.push(`${it.ex} set ${j + 1}: weight "${w}", reps "${reps}"`);
       }
-      out.push([date, D.workout, it.ex, j + 1, reps, w, it.notes.trim()]);
+      out.push([date, workout, it.ex, j + 1, reps, w, it.notes.trim()]);
     }));
     if (errors.length) return say('tstatus', `Nothing saved. Fix (weight and reps must be numbers, reps whole): ${errors.join('; ')}`, 'err');
     if (!out.length && body === '') return say('tstatus', 'Nothing to save: no sets or body weight entered.', 'err');
@@ -670,16 +1113,12 @@ async function saveSession() {
     if ((out.length && mine.lifts.some(r => r[0] === date)) || (body !== '' && mine.bw.some(r => r[0] === date))) {
       if (!await ask(`You already logged ${date}. Add these too?`, 'Add anyway')) return say('tstatus', `Already logged ${date}. Not saved.`, 'err');
     }
-    commit(() => {
-      clearExamples();
-      S.lifts.push(...out);
-      if (body !== '') S.bw.push([date, body]);
-    });
+    const [added] = act({ t: 'lifts', rows: out }, ...(body !== '' ? [{ t: 'bw', rows: [[date, body]] }] : []));
     D = newDraft();
     saveDraft();
-    drawTrain();
-    drawTrends();
-    say('tstatus', `Saved ${out.length} set(s)${body !== '' ? ' and body weight' : ''} for ${date}.`, 'ok');
+    refresh();
+    say('tstatus', `Saved ${added} set(s)${body !== '' ? ' and body weight' : ''} for ${date}.` +
+      (added < out.length ? ` ${out.length - added} set(s) were exact repeats of ones already logged and were skipped.` : ''), 'ok');
   } catch (err) {
     say('tstatus', `Not saved: ${msgOf(err)}`, 'err');
   }
@@ -754,7 +1193,7 @@ async function removeWorkout(i) {
   const name = S.workouts[i].name;
   if (!await ask(`Delete the workout "${name}"? Sets you already logged with it are kept.`, 'Delete')) return;
   try {
-    commit(() => S.workouts.splice(i, 1));
+    act({ t: 'workouts', workouts: S.workouts.filter((_, j) => j !== i) });
     resetBuild();
     drawTrain();
     say('bstatus', `Deleted "${name}".`, 'ok');
@@ -773,12 +1212,79 @@ function saveBuilt() {
   }
   try {
     const w = { name: title, items: B.items.map(x => ({ ex: x.ex, sets: x.sets })) };
-    commit(() => { if (B.editing == null) S.workouts.push(w); else S.workouts[B.editing] = w; });
+    act({ t: 'workouts', workouts: B.editing == null ? S.workouts.concat(w) : S.workouts.map((x, i) => (i === B.editing ? w : x)) });
     resetBuild();
     drawTrain();
     say('bstatus', `Saved "${title}" with ${w.items.length} exercise(s).`, 'ok');
   } catch (err) {
     say('bstatus', `Not saved: ${msgOf(err)}`, 'err');
+  }
+}
+
+// ---------- History ----------
+
+const hist = { shown: 20 };
+const longDate = s => new Date(dayNum(s) * 864e5).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+function drawHistory() {
+  $('hwhere').textContent = REMOTE
+    ? 'Your data lives in the shared database (a Google Sheet). This device keeps a copy so the app still opens offline; exports are for your own analysis.'
+    : 'Everything is stored in this browser on this phone only. Export now and then so you have a copy.';
+  const days = new Map(), day = d => days.get(d) || days.set(d, { sets: [], body: [] }).get(d);
+  if (!S.demo) {
+    S.lifts.forEach(r => day(r[0]).sets.push(r));
+    S.bw.forEach(r => day(r[0]).body.push(r[1]));
+  }
+  const dates = [...days.keys()].sort().reverse();
+  $('hdays').replaceChildren(...dates.slice(0, hist.shown).map(d => dayCard(d, days.get(d))));
+  if (!dates.length) $('hdays').append(h('li', { class: 'hint' }, S.demo ? 'Only example data so far. Your own days will be listed here.' : 'Nothing logged yet.'));
+  $('hmore').hidden = dates.length <= hist.shown;
+  $('hmore').textContent = `Show older days (${dates.length - hist.shown} more)`;
+  const unknown = S.demo ? [] : [...new Set(S.lifts.map(r => r[2].trim()).filter(n => !BY.has(n.toLowerCase())))].sort();
+  $('hunknown').replaceChildren(...(unknown.length ? [unknownBox(unknown)] : []));
+  const added = ALL.filter(e => e.custom);
+  $('hcustom').replaceChildren(...added.map(e => h('li', { class: 'card' },
+    h('div', { class: 'between' },
+      h('div', {}, h('h3', { style: 'text-transform:none' }, e.name),
+        h('p', { class: 'hint' }, [e.equipment, e.mechanic, !e.mine && 'added by someone else'].filter(Boolean).join(' · '))),
+      e.mine && h('div', { class: 'acts' },
+        h('button', { type: 'button', 'aria-label': `Edit ${e.name}`, onclick: () => exerciseForm({ ...e, lock: true }) }, 'Edit'),
+        h('button', { type: 'button', class: 'danger', 'aria-label': `Delete ${e.name}`, onclick: () => removeExercise(e.name) }, 'Delete'))),
+    chips(e))));
+  if (!added.length) $('hcustom').append(h('li', { class: 'hint' }, 'None yet. Anything added here shows up in every exercise search and in the muscle charts.'));
+}
+
+function dayCard(date, d) {
+  const names = [...new Set(d.sets.map(r => r[1]).filter(Boolean))], byEx = new Map();
+  d.sets.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(`${r[5]} × ${r[4]}`));
+  const facts = [names.join(', '), d.sets.length && `${d.sets.length} set${d.sets.length > 1 ? 's' : ''}`, d.body.length && `body weight ${d.body.join(', ')}`];
+  return h('li', { class: 'card' },
+    h('div', { class: 'between' },
+      h('div', {}, h('h3', { style: 'text-transform:none' }, longDate(date)), h('p', { class: 'hint' }, facts.filter(Boolean).join(' · '))),
+      h('button', { type: 'button', class: 'danger', 'aria-label': `Delete ${date}`, onclick: () => removeDay(date) }, 'Delete')),
+    byEx.size > 0 && h('details', {}, h('summary', {}, 'Sets (weight × reps)'),
+      h('ul', {}, [...byEx].map(([ex, sets]) => h('li', {}, `${ex}: ${sets.join(', ')}`)))));
+}
+
+async function removeDay(date) {
+  if (!await ask(`Delete everything logged on ${date}: its sets and its body weight? This can't be undone.`, 'Delete')) return;
+  try {
+    act({ t: 'delDay', date });
+    refresh();
+    say('hstatus', `Deleted ${date}.`, 'ok');
+  } catch (err) {
+    say('hstatus', `Not deleted: ${msgOf(err)}`, 'err');
+  }
+}
+
+async function removeExercise(name) {
+  if (!await ask(`Remove “${name}” from the exercise database? Sets logged with it are kept, but the muscle charts stop counting them.`, 'Remove')) return;
+  try {
+    act({ t: 'delExercise', name });
+    refresh();
+    say('hstatus', `Removed “${name}”.`, 'ok');
+  } catch (err) {
+    say('hstatus', `Not removed: ${msgOf(err)}`, 'err');
   }
 }
 
@@ -811,10 +1317,17 @@ function parseCsv(text) {
   return rows;
 }
 
-/** Reads a lifts (7 columns) or body-weight (2 columns) CSV. Any bad row stops the import; exact repeats are skipped. */
+/**
+ * Reads one tab saved as CSV: Lifts (7 columns), Body_Weight (2), Exercises (header starts Exercise, Primary) or
+ * Workouts (one column per workout). Any bad row stops that file; exact repeats are skipped. Returns a message.
+ */
 function importCsv(text) {
   const rows = parseCsv(text.replace(/^﻿/, '')).map((r, i) => ({ r: r.map(c => c.trim()), line: i + 1 })).filter(x => x.r.some(Boolean));
-  if (rows.length && !isDate(rows[0].r[0])) rows.shift(); // header row
+  if (!rows.length) throw new Error('The file has no data rows.');
+  const head = rows[0].r.map(c => c.toLowerCase());
+  if (head[0] === 'exercise' && head[1] === 'primary') return importExercises(rows.slice(1));
+  if (head[0] !== 'date' && !rows.some(x => isDate(x.r[0]))) return importWorkouts(rows);
+  if (!isDate(rows[0].r[0])) rows.shift(); // header row
   if (!rows.length) throw new Error('The file has no data rows.');
   const width = rows[0].r.length, lifts = width === LIFT_COLS.length;
   if (!lifts && width !== BW_COLS.length) {
@@ -839,22 +1352,52 @@ function importCsv(text) {
   if (errors.length) {
     throw new Error(`Nothing imported. ${errors.length} row(s) need fixing: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '; …' : ''}`);
   }
-  let added = 0;
-  commit(() => {
-    clearExamples();
-    const target = lifts ? S.lifts : S.bw, seen = new Set(target.map(r => JSON.stringify(r)));
-    parsed.forEach(r => {
-      const k = JSON.stringify(r);
-      if (seen.has(k)) return;
-      seen.add(k);
-      target.push(r);
-      added++;
-    });
-    target.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)); // stable, so set order within a day is kept
-  });
+  const [added] = act({ t: lifts ? 'lifts' : 'bw', rows: parsed });
   const unknown = lifts ? [...new Set(parsed.map(r => r[2]).filter(n => !BY.has(n.toLowerCase())))].sort() : [];
   return `Imported ${added} ${lifts ? 'set' : 'body-weight'} row(s); ${parsed.length - added} were already here and skipped.` +
-    (unknown.length ? ` Not in the exercise list, so not counted in muscle charts: ${unknown.join(', ')}.` : '');
+    (unknown.length ? ` Not in the exercise database yet, so not counted in muscle charts until you add them (buttons below): ${unknown.join(', ')}.` : '');
+}
+
+function importExercises(rows) {
+  const errors = [], ops = [], split = v => v.toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+  let skipped = 0;
+  rows.forEach(({ r, line }) => {
+    const [name = '', pri = '', sec = '', equip = '', mech = ''] = r, bad = why => errors.push(`line ${line}: ${why}`);
+    const had = S.exercises.find(e => same(e.name, name));
+    if (!name || BUILTIN.has(name.toLowerCase()) || (had && !had.mine)) return skipped++;
+    const primary = split(pri), secondary = split(sec).filter(m => !primary.includes(m)), equipment = equip.toLowerCase() || 'none listed';
+    const odd = primary.concat(secondary).filter(m => !MUSCLES.includes(m));
+    if (FORMULA_START.test(name) || name.length > 80) return bad(`"${name}" is not a usable exercise name`);
+    if (!primary.length) return bad(`"${name}" has no primary muscle`);
+    if (odd.length) return bad(`"${odd.join(', ')}" is not in the muscle list`);
+    if (!EQUIP.includes(equipment)) return bad(`equipment "${equip}" is not in the equipment list`);
+    if (!MECHANICS.includes(mech.toLowerCase())) return bad(`mechanic "${mech}" must be compound, isolation or blank`);
+    ops.push({ t: 'exercise', ex: { name, primary, secondary, equipment, mechanic: mech.toLowerCase() } });
+  });
+  if (errors.length) {
+    throw new Error(`Nothing imported. ${errors.length} row(s) need fixing: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '; …' : ''}`);
+  }
+  if (ops.length) act(...ops);
+  return `Added ${ops.length} exercise(s) to the exercise database; ${skipped} row(s) were skipped because they are built in or were added by someone else.`;
+}
+
+/** A Workouts tab has no dates: row 1 holds the workout names and each column lists that workout's exercises. */
+async function importWorkouts(rows) {
+  const st = stats(), found = [];
+  rows[0].r.forEach((name, c) => {
+    const items = rows.slice(1).map(x => x.r[c]).filter(Boolean).map(ex => {
+      const past = st(ex);
+      return { ex, sets: past ? Math.min(MAX_SETS, Math.max(1, past.last.sets.length)) : 3 };
+    });
+    if (name && items.length && !found.some(w => same(w.name, name))) found.push({ name, items });
+  });
+  if (!found.length || found.some(w => FORMULA_START.test(w.name) || w.name.length > 80 || w.items.some(x => x.ex.length > 80))) {
+    throw new Error('This file is not a Lifts, Body_Weight, Exercises or Workouts tab. Dates must be yyyy-mm-dd.');
+  }
+  const ok = await ask(`This looks like a Workouts tab with ${found.length} workout(s): ${found.map(w => w.name).join(', ')}. Import them? A saved workout with one of these names is replaced.`, 'Import');
+  if (!ok) return 'Workouts were not imported.';
+  act({ t: 'workouts', workouts: S.workouts.filter(w => !found.some(f => same(f.name, w.name))).concat(found) });
+  return `Imported ${found.length} workout(s). Sets per exercise match your last logged session of each (3 where there is none); change them on the Build tab.`;
 }
 
 /** Hands the viewer a file. Returns a message for the status line. */
@@ -897,63 +1440,89 @@ function copySheet(filename, text, why) {
 
 async function exportCsv(name, header, rows) {
   try {
-    if (S.demo || !rows.length) return say('dstatus', S.demo ? 'Nothing to export yet: only example data is here.' : `Nothing to export yet: ${name} would be empty.`, 'err');
-    say('dstatus', `Preparing ${name}…`);
-    say('dstatus', await saveFile(name, toCsv(header, rows)), 'ok');
+    if (S.demo || !rows.length) return say('estatus', S.demo ? 'Nothing to export yet: only example data is here.' : `Nothing to export yet: ${name} would be empty.`, 'err');
+    say('estatus', `Preparing ${name}…`);
+    say('estatus', await saveFile(name, toCsv(header, rows)), 'ok');
   } catch (err) {
-    say('dstatus', `Export failed: ${msgOf(err)}`, 'err');
+    say('estatus', `Export failed: ${msgOf(err)}`, 'err');
   }
 }
 
 // ---------- Wiring ----------
 
 function setView(name) {
-  ['Trends', 'Train', 'Build'].forEach(v => {
+  ['Gate', 'Trends', 'Train', 'Build', 'History'].forEach(v => {
     $('v' + v).hidden = v !== name;
-    $('tab' + v).setAttribute('aria-pressed', String(v === name));
+    if (v !== 'Gate') $('tab' + v).setAttribute('aria-pressed', String(v === name));
   });
+  $('nav').hidden = name === 'Gate';
   if (name === 'Trends') drawTrends();
+  if (name === 'History') drawHistory();
   window.scrollTo(0, 0);
 }
 
 window.addEventListener('error', ev => say('warn', `App error: ${ev.message}`, 'err'));
 window.addEventListener('unhandledrejection', ev => say('warn', `App error: ${msgOf(ev.reason)}`, 'err'));
 
-load();
-['Trends', 'Train', 'Build'].forEach(v => $('tab' + v).addEventListener('click', () => setView(v)));
+['Trends', 'Train', 'Build', 'History'].forEach(v => $('tab' + v).addEventListener('click', () => setView(v)));
 $('sheetX').addEventListener('click', () => { const cancel = sheetCancel; closeSheet(); if (cancel) cancel(); });
 $('demoClear').addEventListener('click', () => {
   try {
     commit(clearExamples);
-    drawTrends();
-    drawTrain();
+    refresh();
   } catch (err) {
     say('warn', `Could not clear the examples: ${msgOf(err)}`, 'err');
   }
 });
+$('who').addEventListener('click', profileSheet);
+$('gform').addEventListener('submit', submitGate);
+$('legacyYes').addEventListener('click', () => settleLegacy(true));
+$('legacyNo').addEventListener('click', () => settleLegacy(false));
 $('tworkout').addEventListener('change', pickWorkout);
-$('tdate').addEventListener('change', ev => { D.date = ev.target.value; saveDraft(); });
+$('tname').addEventListener('input', ev => { D.workout = ev.target.value; saveDraft(); });
+$('tdate').addEventListener('change', ev => { D.date = ev.target.value; saveDraft(); drawTrain(); });
 $('tbody').addEventListener('input', ev => { D.body = ev.target.value; saveDraft(); });
+$('tadd').addEventListener('click', addToSession);
 $('tsave').addEventListener('click', saveSession);
 $('bsave').addEventListener('click', saveBuilt);
 $('bcancel').addEventListener('click', () => { say('bstatus', ''); resetBuild(); });
+$('hpast').addEventListener('click', () => { setView('Train'); $('tdate').focus(); });
+$('hmore').addEventListener('click', () => { hist.shown += 40; drawHistory(); });
+$('hnew').addEventListener('click', () => exerciseForm({}));
 $('expLifts').addEventListener('click', () => exportCsv('lifts.csv', LIFT_COLS, S.lifts));
 $('expBw').addEventListener('click', () => exportCsv('body_weight.csv', BW_COLS, S.bw));
+$('expEx').addEventListener('click', () => exportCsv('exercises.csv', ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic'],
+  ALL.filter(e => e.custom).map(e => [e.name, e.primary.join(', '), e.secondary.join(', '), e.equipment === 'none listed' ? '' : e.equipment, e.mechanic || ''])));
 $('imp').addEventListener('change', async ev => {
-  const file = ev.target.files[0];
-  if (!file) return;
+  const notes = [];
+  let failed = false;
   try {
-    say('dstatus', importCsv(await file.text()), 'ok');
-    drawTrends();
-    drawTrain();
+    const files = await Promise.all([...ev.target.files].map(async f => ({ name: f.name, text: await f.text() })));
+    // Exercises first and Workouts last, so muscle tags and set counts are in place when the later tabs need them.
+    const rank = t => (/^﻿?"?exercise"?,"?primary/i.test(t) ? 0 : /^﻿?"?(date|\d{4}-\d\d-\d\d)/i.test(t) ? 1 : 2);
+    files.sort((a, b) => rank(a.text) - rank(b.text));
+    for (const f of files) {
+      try {
+        notes.push(`${f.name}: ${await importCsv(f.text)}`);
+      } catch (err) {
+        failed = true;
+        notes.push(`${f.name}: import failed. ${msgOf(err)}`);
+      }
+    }
   } catch (err) {
-    say('dstatus', `Import failed: ${msgOf(err)}`, 'err');
+    failed = true;
+    notes.push(`Import failed: ${msgOf(err)}`);
   }
+  say('dstatus', notes.join(' '), failed ? 'err' : 'ok');
+  refresh();
   ev.target.value = '';
 });
-$('bpicker').append(picker('b', e => { B.items.push({ ex: e.name, sets: 3 }); drawPicked(); }));
-drawTrends();
-drawTrain();
-drawBuild();
+const buildPicker = picker('b', e => { B.items.push({ ex: e.name, sets: 3 }); drawPicked(); });
+$('bpicker').append(buildPicker);
+window.addEventListener('online', sync);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+
+if (REMOTE) session = readSession();
+enter();
 </script>
 </body></html>
