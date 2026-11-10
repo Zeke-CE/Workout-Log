@@ -4,6 +4,88 @@ Workout Log is a mobile-first static web app. It can run entirely in one
 browser, or use a Google Sheet through the Apps Script web app in
 [`backend/Code.gs`](backend/Code.gs).
 
+## Intensity techniques (sub-sets)
+
+Any set can carry sub-sets that extend it past the point where the straight
+set ended:
+
+| Technique | What you log | How it is done |
+| --- | --- | --- |
+| Partial reps | reps, share of the range (¼, ½, ¾) | At failure, keep going through part of the range, in the stretched part of the lift. Same weight. |
+| Myo reps | rest in seconds, weight, reps | Rest about 20 seconds, then a mini-set of a few reps; repeat. Weight left blank means the same weight. |
+| Rest-pause | extra reps | Rack the weight for a few breaths, then add the reps you can. Same weight. |
+| Drop set | weight, reps | Cut the weight by about a fifth and go again straight away. |
+
+- **Chain:** tap **+** at the end of a set row again to add another sub-set
+  after the last one (drop, then drop, then partials).
+- **Nest:** tap **+** on a sub-set row to put a sub-set under it, one step
+  further in. It takes its weight from the row it sits under, so partials
+  nested under a drop are logged at the dropped weight. Up to 3 levels, 9 per
+  level.
+- **Build tab:** "Add a technique to the last set" plans sub-sets for an
+  exercise. They appear on its last set when you train that workout.
+- **Train tab:** add or remove sub-sets on any set on the day. A planned
+  sub-set left blank is skipped and not saved.
+
+### How they count
+
+- Sub-sets are tallied on their own, in grey, with the same weighting as sets
+  (1 for a primary muscle, ½ for a secondary one). They are **not** added to
+  the set totals or compared with the 10-per-week and 11-per-session guide
+  lines, because no study gives a conversion from a sub-set to a straight set.
+- Their weight × reps does count toward **Load**. Partial reps are scaled by
+  their share of the range.
+- Bests, targets, the grey "last session" numbers and the **Strength** index
+  use straight sets only.
+
+### What the research says
+
+- **Drop sets:** about the same muscle growth as straight sets, in a half to a
+  third of the training time. Sødal et al. 2023, meta-analysis of 5 studies,
+  *Sports Med Open* 9:66, <https://doi.org/10.1186/s40798-023-00620-5>.
+- **Rest-pause:** matched straight sets for growth when total volume was
+  equal, in 28 trained men over 8 weeks (Enes et al. 2021, *Appl Physiol Nutr
+  Metab*, <https://pubmed.ncbi.nlm.nih.gov/34260860/>). An earlier 6-week
+  study of 18 trained people found more thigh growth with rest-pause and no
+  difference elsewhere (Prestes et al. 2019, *J Strength Cond Res* 33:S113,
+  <https://pubmed.ncbi.nlm.nih.gov/28617715/>).
+- **Myo reps:** a rest-pause variant (one set near failure, then mini-sets on
+  short rests) from coaching practice. No trial of myo reps by name is cited
+  here; the rest-pause studies above are the closest evidence.
+- **Partial reps past failure:** calves grew 9.6% against 6.7% in 10 weeks
+  when stretched-position partials were added after full-rep failure. One
+  within-person study of 23 untrained men (Larsen et al. 2025, *Front
+  Psychol* 16:1494323, <https://doi.org/10.3389/fpsyg.2025.1494323>).
+- **Which part of the range:** full range is a sound default, and partials do
+  best at long muscle lengths; the differences are small (Wolf et al. 2023,
+  *Int J Strength Cond* 3(1), <https://doi.org/10.47206/ijsc.v3i1.182>).
+- **Overview:** a systematic review of advanced techniques found too little
+  evidence to give volume guidelines for them (Krzysztofik et al. 2019, *Int J
+  Environ Res Public Health* 16:4897,
+  <https://doi.org/10.3390/ijerph16244897>).
+
+The study figures above come from the papers' abstracts. Sources for the rest
+of the app's numbers are listed in the app under **Trends → Where the numbers
+come from**.
+
+### How they are stored
+
+A sub-set is one more row in `Lifts` with the same `set` number as the set it
+belongs to, and four extra columns filled in:
+
+| Column | Meaning |
+| --- | --- |
+| `sub` | Place under the set: `2` is the second sub-set, `2.1` the first one nested under it. |
+| `technique` | `partial`, `myo`, `rest-pause` or `drop`. Blank on a straight set. |
+| `rest_s` | Myo-rep rest in seconds, if entered. |
+| `rom` | Share of the range for partial reps: 0.25, 0.5 or 0.75. |
+
+`weight_lb` always holds the weight actually used, including on rows that
+took it from the row above. In pandas, `df[df.technique.isna()]` gives the
+straight sets. A workout's planned sub-sets are kept as JSON in the
+`techniques` column of `Workouts`. CSV files exported before these columns
+existed still import.
+
 ## Local/browser-only mode
 
 Open [`index.html`](index.html) directly, or serve this directory with any
@@ -102,6 +184,19 @@ Open the deployed static frontend and verify this sequence:
 If a deployment is updated, use **Deploy → Manage deployments → Edit** and
 create a new version. Keep the same deployment URL so the static frontend does
 not need another configuration change.
+
+### Updating a deployment for intensity techniques
+
+Do this before publishing the new `index.html`. An older backend still saves
+straight sets, but it rejects sub-set rows and drops the planned sub-sets of
+saved workouts.
+
+1. Paste the new [`backend/Code.gs`](backend/Code.gs) into the Apps Script
+   editor.
+2. Run `setup` once. It adds the `sub`, `technique`, `rest_s` and `rom`
+   headers to `Lifts` and `techniques` to `Workouts`. Existing rows are kept.
+3. **Deploy → Manage deployments → Edit**, choose **New version**, deploy.
+4. Publish the new `index.html`.
 
 ## Data and security notes
 

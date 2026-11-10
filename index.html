@@ -49,6 +49,7 @@
   /* Primary / secondary key */
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--pri); margin-right: 5px; flex: none; }
   .dot.s { background: var(--sec); }
+  .dot.t { background: var(--mute); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; color: var(--mute); }
   .chips span { display: inline-flex; align-items: center; }
   .key { font-size: 14px; }
@@ -60,11 +61,16 @@
   svg.chart { display: block; width: 100%; height: auto; touch-action: pan-y; }
   .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
   /* Train */
-  .sets { display: grid; grid-template-columns: 24px 1fr 1fr; gap: 6px 8px; align-items: center; }
+  .sets { display: grid; grid-template-columns: 24px 1fr 1fr 44px; gap: 6px 8px; align-items: center; }
   .sets > span { font-size: 14px; color: var(--mute); font-variant-numeric: tabular-nums; }
   .target b { color: var(--accent); }
+  /* Intensity-technique sub-sets: one row each, a step further in per level */
+  .sub { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
+  .sub > span { margin-right: auto; flex: none; font-size: 14px; color: var(--mute); }
+  .sub input, .sub select { flex: 1; min-width: 0; padding: 8px 6px; }
   .step { display: flex; align-items: center; gap: 6px; }
   .step button, .mini { width: 44px; padding: 0; flex: none; font-size: 18px; }
+  .sub .mini { width: 36px; }
   .step output { min-width: 58px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
   /* Lists */
   .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -73,12 +79,13 @@
   .ctl { display: flex; justify-content: space-between; gap: 6px; }
   .ctl > div, .acts { display: flex; gap: 6px; flex: none; }
   /* Volume bars (Build preview) */
-  .bar { display: grid; grid-template-columns: 96px 1fr 36px; gap: 8px; align-items: center; font-size: 14px; text-transform: capitalize; }
+  .bar { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; align-items: center; font-size: 14px; text-transform: capitalize; }
   .track { position: relative; height: 14px; border-radius: 4px; background: var(--bg); display: flex; gap: 2px; }
   .track i { display: block; height: 100%; background: var(--pri); border-radius: 3px; }
   .track i.s { background: var(--sec); }
+  .track i.t { background: var(--mute); }
   .track b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
-  .val { text-align: right; font-variant-numeric: tabular-nums; }
+  .val { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
   /* Tab bar */
   nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line);
     padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
@@ -150,16 +157,22 @@
           (<a href="https://www.unm.edu/~rrobergs/478PredictionAccuracy.pdf" target="_blank" rel="noopener">Mayhew et al. 2008</a>). Each lift is compared with its own first week in the range (= 100), then lifts are averaged per primary muscle. Assisted and zero-weight lifts are left out.</li>
         <li>Adding or dropping sets on the day is volume autoregulation, reviewed in
           <a href="https://peerj.com/articles/10663" target="_blank" rel="noopener">Larsen et al. 2021</a>.</li>
+        <li>Intensity techniques are sub-sets logged under a set. Drop sets grew muscle about as much as straight sets in a half to a third of the time
+          (<a href="https://doi.org/10.1186/s40798-023-00620-5" target="_blank" rel="noopener">Sødal et al. 2023</a>, meta-analysis of 5 studies), and rest-pause matched straight sets when total volume was equal
+          (<a href="https://pubmed.ncbi.nlm.nih.gov/34260860/" target="_blank" rel="noopener">Enes et al. 2021</a>;
+          <a href="https://pubmed.ncbi.nlm.nih.gov/28617715/" target="_blank" rel="noopener">Prestes et al. 2019</a>). Myo reps are a rest-pause variant (one set near failure, then mini-sets on short rests); no trial of them by name is cited here.</li>
+        <li>Partial reps added after full-rep failure, done in the stretched part of the lift, grew calves more than stopping at failure (9.6% vs 6.7% in 10 weeks,
+          <a href="https://doi.org/10.3389/fpsyg.2025.1494323" target="_blank" rel="noopener">Larsen et al. 2025</a>, one study of 23 untrained men). Full range is still the default; partials do best at long muscle lengths
+          (<a href="https://doi.org/10.47206/ijsc.v3i1.182" target="_blank" rel="noopener">Wolf et al. 2023</a>).</li>
+        <li>No study gives a conversion from a technique sub-set to a straight set, so sub-sets are tallied on their own (grey) with the same 1 and ½ weighting and are not added to the set totals or compared with the guide lines. Their weight × reps does count toward Load, with partial reps scaled by their share of the range. Bests, targets and Strength use straight sets only.</li>
         <li>Exercises and muscle tags: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (public domain), pinned at commit f00c92c.</li>
       </ul>
     </details>
   </section>
 
   <section id="vTrain" hidden>
-    <div class="row">
-      <label>Date <input id="tdate" type="date"></label>
-      <label>Body weight <input id="tbody" type="text" inputmode="decimal" autocomplete="off" placeholder="optional"></label>
-    </div>
+    <label>Date <input id="tdate" type="date"></label>
+    <label>Body weight <input id="tbody" type="text" inputmode="decimal" autocomplete="off" placeholder="optional"></label>
     <label>Workout <select id="tworkout"></select></label>
     <label id="tnameWrap" hidden>Session name <input id="tname" type="text" autocomplete="off" maxlength="80" placeholder="e.g. Hotel gym"></label>
     <p id="tpast" class="hint"></p>
@@ -191,7 +204,7 @@
       <button id="hpast" type="button">Log a past workout</button>
       <label>Or import spreadsheet tabs saved as CSV (pick several at once) <input id="imp" type="file" accept=".csv,text/csv" multiple></label>
       <p id="dstatus" class="status" role="status" aria-live="polite"></p>
-      <p class="hint">In Google Sheets: File → Download → Comma-separated values, once per tab. Lifts (date, workout, exercise, set, reps, weight_lb, notes), Body_Weight (date, body_weight_lb), Exercises (Exercise, Primary, Secondary, Equipment, Mechanic) and Workouts (one column per workout) are all understood.</p>
+      <p class="hint">In Google Sheets: File → Download → Comma-separated values, once per tab. Lifts (date, workout, exercise, set, reps, weight_lb, notes, with or without sub, technique, rest_s, rom), Body_Weight (date, body_weight_lb), Exercises (Exercise, Primary, Secondary, Equipment, Mechanic) and Workouts (one column per workout) are all understood.</p>
     </div>
     <div id="hunknown" class="stack"></div>
     <h2>Logged days</h2>
@@ -210,7 +223,7 @@
       </div>
       <button id="expEx" type="button">Export exercises.csv (the ones added here)</button>
       <p id="estatus" class="status" role="status" aria-live="polite"></p>
-      <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes.</p>
+      <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes. Technique sub-sets are rows too, with <code>technique</code> filled in: <code>sub</code> is the place under the set (2.1 = first one nested under the second), <code>rest_s</code> the myo-rep rest, <code>rom</code> the share of the range for partials.</p>
     </div>
   </section>
 </main>
@@ -246,6 +259,17 @@ const ONE_OFF = '+'; // workout names cannot start with +, so this never collide
 const SESSION_REF = 11, WEEK_REF = 10, SHOW_MAX = 30, MAX_SETS = 10;
 const FORMULA_START = /^[=+\-@]/; // a spreadsheet would read these as formulas when the CSV is opened
 const LIFT_COLS = ['date', 'workout', 'exercise', 'set', 'reps', 'weight', 'notes'], BW_COLS = ['date', 'weight'];
+// A lifts row for an intensity-technique sub-set carries 4 more values. sub = its place under the set: '2' is the second
+// sub-set, '2.1' the first one nested under that. A straight set stays 7 values long.
+const TECH_COLS = ['sub', 'technique', 'rest_s', 'rom'], SUB = /^[1-9](\.[1-9]){0,2}$/;
+// technique: [tag, name, how to do it]. Sources are listed under "Where the numbers come from".
+const TECH = {
+  partial: ['Partial', 'Partial reps', 'At failure, keep going through part of the range, in the stretched part of the lift. Same weight.'],
+  myo: ['Myo', 'Myo reps', 'Rest about 20 seconds, then a mini-set of a few reps. Repeat until you lose a rep. Same weight unless you enter one.'],
+  'rest-pause': ['Rest-pause', 'Rest-pause', 'Rack the weight for a few breaths, then add the extra reps you can. Same weight.'],
+  drop: ['Drop', 'Drop set', 'Cut the weight by about a fifth and go again straight away.'],
+};
+const ROMS = [['¼ range', 0.25], ['½ range', 0.5], ['¾ range', 0.75]];
 const $ = id => document.getElementById(id);
 
 // ---------- Small helpers ----------
@@ -275,6 +299,10 @@ function say(id, msg, kind) {
 const msgOf = err => (err && err.message ? err.message : String(err));
 const fmt = n => String(Math.round(n * 10) / 10);
 const big = n => Math.round(n).toLocaleString('en-US');
+/** A sub-set tree as a saved workout keeps it: technique and nesting only, [{ t, kids }]. Also a deep copy. */
+const plan = list => (list || []).map(n => ({ t: n.t, kids: plan(n.kids) }));
+const count = list => (list || []).reduce((n, x) => n + 1 + count(x.kids), 0);
+const used = n => !!(n.w || n.r || (n.kids || []).some(used));
 
 // Dates are local 'yyyy-mm-dd' strings everywhere, so there is no time-zone drift and they sort as text.
 const pad = n => String(n).padStart(2, '0');
@@ -375,7 +403,7 @@ function clearExamples() {
 }
 
 const newDraft = () => ({ date: today(), workout: '', oneOff: false, body: '', items: [] });
-const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(s => s.w || s.r));
+const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(used));
 function saveDraft() {
   if (!canStore) return;
   try {
@@ -416,7 +444,7 @@ function applyOp(op) {
     target.sort(byDate);
     return added;
   }
-  if (op.t === 'workouts') S.workouts = op.workouts.map(w => ({ name: w.name, items: w.items.map(x => ({ ex: x.ex, sets: x.sets })) }));
+  if (op.t === 'workouts') S.workouts = op.workouts.map(w => ({ name: w.name, items: w.items.map(x => ({ ex: x.ex, sets: x.sets, tech: plan(x.tech) })) }));
   if (op.t === 'exercise') S.exercises = S.exercises.filter(e => !same(e.name, op.ex.name)).concat({ ...op.ex, mine: true });
   if (op.t === 'delExercise') S.exercises = S.exercises.filter(e => !same(e.name, op.name));
   if (op.t === 'delDay') {
@@ -471,12 +499,13 @@ function addExamples() {
 
 /**
  * Per exercise (lowercased name): pr = heaviest weight (lowest for "Assisted" lifts), most reps at that weight,
- * latest date with both; last = the sets of the most recent session. Returns a lookup function.
+ * latest date with both; last = the sets of the most recent session. Technique sub-sets are left out. Returns a lookup function.
  */
 function stats() {
   const best = {}, last = {};
-  S.lifts.forEach(([date, , exercise, set, reps, weight]) => {
+  S.lifts.forEach(([date, , exercise, set, reps, weight, , , tech]) => {
     const k = exercise.trim().toLowerCase();
+    if (tech) return;
     if (!last[k] || date > last[k].date) last[k] = { date, sets: [] };
     if (last[k].date === date) last[k].sets[set - 1] = { weight, reps };
     const b = best[k];
@@ -487,14 +516,17 @@ function stats() {
   return name => { const k = name.trim().toLowerCase(); return best[k] ? { pr: best[k], last: last[k] } : null; };
 }
 
-/** Fractional sets per muscle for a list of {ex, sets}: +1 per set to each primary muscle, +0.5 to each secondary. */
+/**
+ * Fractional sets per muscle for a list of {ex, sets, tech}: +1 per set to each primary muscle, +0.5 to each secondary.
+ * t = the planned technique sub-sets, weighted the same way but kept apart.
+ */
 function volume(items) {
-  const tot = {}, unknown = [];
-  items.forEach(({ ex, sets }) => {
-    const e = BY.get(ex.toLowerCase());
+  const tot = {}, unknown = [], get = m => tot[m] || (tot[m] = { p: 0, s: 0, t: 0 });
+  items.forEach(({ ex, sets, tech }) => {
+    const e = BY.get(ex.toLowerCase()), n = count(tech);
     if (!e) return unknown.push(ex);
-    e.primary.forEach(m => { (tot[m] = tot[m] || { p: 0, s: 0 }).p += sets; });
-    e.secondary.forEach(m => { (tot[m] = tot[m] || { p: 0, s: 0 }).s += sets * 0.5; });
+    e.primary.forEach(m => { get(m).p += sets; get(m).t += n; });
+    e.secondary.forEach(m => { get(m).s += sets * 0.5; get(m).t += n * 0.5; });
   });
   return { tot, unknown };
 }
@@ -503,22 +535,22 @@ function volume(items) {
 function trendData(weeks) {
   const start = monday(dayNum(today())) - 7 * (weeks - 1);
   const zeros = () => Array(weeks).fill(0), blanks = () => Array(weeks).fill(null);
-  const M = {}, get = m => M[m] || (M[m] = { setsP: zeros(), setsS: zeros(), loadP: zeros(), loadS: zeros(), lifts: {}, strength: blanks() });
+  const M = {}, get = m => M[m] || (M[m] = { setsP: zeros(), setsS: zeros(), setsT: zeros(), loadP: zeros(), loadS: zeros(), lifts: {}, strength: blanks() });
   const unknown = new Set();
-  S.lifts.forEach(([date, , exercise, , reps, weight]) => {
-    const i = (monday(dayNum(date)) - start) / 7;
+  S.lifts.forEach(([date, , exercise, , reps, weight, , , tech, , rom]) => {
+    const i = (monday(dayNum(date)) - start) / 7, sets = tech ? 'setsT' : 'setsP', load = weight * reps * (rom || 1);
     if (i < 0 || i >= weeks) return;
     const e = BY.get(exercise.trim().toLowerCase());
     if (!e) return unknown.add(exercise);
-    // Estimated 1RM (Epley); only sets of 10 reps or fewer, and not assisted or zero-weight lifts.
-    const oneRm = reps <= 10 && weight > 0 && !/assisted/i.test(exercise) ? (reps === 1 ? weight : weight * (1 + reps / 30)) : 0;
+    // Estimated 1RM (Epley); only straight sets of 10 reps or fewer, and not assisted or zero-weight lifts.
+    const oneRm = !tech && reps <= 10 && weight > 0 && !/assisted/i.test(exercise) ? (reps === 1 ? weight : weight * (1 + reps / 30)) : 0;
     e.primary.forEach(m => {
       const g = get(m);
-      g.setsP[i] += 1;
-      g.loadP[i] += weight * reps;
+      g[sets][i] += 1;
+      g.loadP[i] += load;
       if (oneRm) { const a = g.lifts[e.name] || (g.lifts[e.name] = blanks()); a[i] = Math.max(a[i] || 0, oneRm); }
     });
-    e.secondary.forEach(m => { const g = get(m); g.setsS[i] += 0.5; g.loadS[i] += weight * reps * 0.5; });
+    e.secondary.forEach(m => { const g = get(m); g[tech ? 'setsT' : 'setsS'][i] += 0.5; g.loadS[i] += load * 0.5; });
   });
   // Strength index: each lift relative to its own first week in range (= 100), averaged over the lifts trained that week.
   Object.values(M).forEach(g => {
@@ -908,8 +940,8 @@ function frame(n, onPick) {
   return { svg, hits, guide };
 }
 
-/** Stacked weekly columns: primary from the baseline, secondary on top, a 2px gap between them. */
-function barChart(pri, sec, max, ref, onPick) {
+/** Stacked weekly columns: primary from the baseline, secondary on top, then technique sub-sets (`ext`, optional), 2px gaps between them. */
+function barChart(pri, sec, ext, max, ref, onPick) {
   const n = pri.length, slot = CW / n, w = Math.max(1, Math.min(24, slot - (slot > 8 ? 3 : 1))), y = v => CH - v / max * (CH - 12);
   const f = frame(n, onPick);
   const seg = (x, top, bottom, fill, round) => {
@@ -921,6 +953,7 @@ function barChart(pri, sec, max, ref, onPick) {
     const x = i * slot + (slot - w) / 2, yp = y(pri[i]), yt = y(pri[i] + sec[i]);
     seg(x, yp, CH, 'var(--pri)', !sec[i]);
     seg(x, yt, yp - (pri[i] ? 2 : 0), 'var(--sec)', true);
+    if (ext) seg(x, y(pri[i] + sec[i] + ext[i]), yt - (pri[i] + sec[i] ? 2 : 0), 'var(--mute)', true);
   }
   if (ref) f.guide(y(ref), String(ref));
   f.hits();
@@ -945,7 +978,7 @@ function trendCard(title, t, makeChart, readout) {
   const svg = makeChart(i => {
     const r = readout(i);
     num.textContent = r.num;
-    read.replaceChildren(h('span', {}, `Week of ${shortDate(t.start + 7 * i)}`), ...r.parts);
+    read.replaceChildren(h('span', {}, `Week of ${shortDate(t.start + 7 * i)}`), ...r.parts.filter(Boolean));
   });
   svg.setAttribute('aria-label', `${title}, weekly`);
   const last = t.start + 7 * (t.body.length - 1);
@@ -973,12 +1006,14 @@ function drawTrends() {
     $('key').replaceChildren(
       keyLine('dot', sets ? 'Primary: the muscle an exercise mainly trains. Each set counts 1.' : 'Primary: weight × reps from exercises that mainly train the muscle.'),
       keyLine('dot s', sets ? 'Secondary: a muscle that assists. Each set counts ½.' : 'Secondary: weight × reps from exercises where the muscle assists, counted at half.'),
-      ...(sets ? [h('p', { class: 'hint' }, `Line at ${WEEK_REF} sets a week is guidance, not a limit.`)] : []));
-    const max = Math.max(sets ? WEEK_REF : 1, ...names.flatMap(m => t.M[m][P].map((v, i) => v + t.M[m][Sx][i])));
+      ...(sets ? [keyLine('dot t', 'Technique: partial, myo, rest-pause and drop sub-sets. Tallied on their own, not in the set total.'),
+        h('p', { class: 'hint' }, `Line at ${WEEK_REF} sets a week is guidance, not a limit.`)] : []));
+    const max = Math.max(sets ? WEEK_REF : 1, ...names.flatMap(m => t.M[m][P].map((v, i) => v + t.M[m][Sx][i] + (sets ? t.M[m].setsT[i] : 0))));
     names.sort((a, b) => total(t.M[b][P]) + total(t.M[b][Sx]) - total(t.M[a][P]) - total(t.M[a][Sx]) || a.localeCompare(b));
-    names.forEach(m => cards.push(trendCard(m, t, pick => barChart(t.M[m][P], t.M[m][Sx], max, sets ? WEEK_REF : 0, pick), i => {
-      const p = t.M[m][P][i], s = t.M[m][Sx][i];
-      return { num: show(p + s), parts: [h('span', {}, h('i', { class: 'dot' }), `${show(p)} primary`), h('span', {}, h('i', { class: 'dot s' }), `${show(s)} secondary`)] };
+    names.forEach(m => cards.push(trendCard(m, t, pick => barChart(t.M[m][P], t.M[m][Sx], sets && t.M[m].setsT, max, sets ? WEEK_REF : 0, pick), i => {
+      const p = t.M[m][P][i], s = t.M[m][Sx][i], x = sets && t.M[m].setsT[i];
+      return { num: show(p + s), parts: [h('span', {}, h('i', { class: 'dot' }), `${show(p)} primary`), h('span', {}, h('i', { class: 'dot s' }), `${show(s)} secondary`),
+        x > 0 && h('span', {}, h('i', { class: 'dot t' }), `${fmt(x)} technique`)] };
     })));
   }
   if (!cards.length) cards.push(h('p', { class: 'card hint' }, view.metric === 'strength'
@@ -990,6 +1025,29 @@ function drawTrends() {
   if (t.unknown.length) cards.push(unknownBox(t.unknown));
   $('charts').replaceChildren(...cards);
   $('demo').hidden = !S.demo;
+}
+
+// ---------- Intensity-technique sub-sets (Train and Build) ----------
+
+function addTech(list, what, changed) {
+  openSheet(`Add to ${what}`, Object.keys(TECH).map(t => h('button', { type: 'button', class: 'pick',
+    onclick: () => { list.push({ t, kids: [] }); closeSheet(); changed(); } }, TECH[t][1], h('span', { class: 'hint' }, TECH[t][2]))));
+}
+
+/**
+ * One row per sub-set, each followed by the sub-sets nested under it, a step further in. Sub-sets of the same row are
+ * done one after another (chained). `fields` supplies a row's inputs on the Train tab; a saved workout has none.
+ */
+function techRows(list, depth, what, changed, fields) {
+  return list.flatMap((n, k) => {
+    const name = `${what} › ${TECH[n.t][1].toLowerCase()} ${k + 1}`, kids = n.kids || (n.kids = []);
+    return [h('div', { class: 'sub', style: `margin-left:${depth * 12}px` },
+      h('span', {}, `↳ ${TECH[n.t][0]}`), fields && fields(n, name),
+      h('button', { type: 'button', class: 'mini', 'aria-label': `Add a technique under ${name}`, disabled: depth >= 2 || kids.length >= 9,
+        onclick: () => addTech(kids, name, changed) }, '+'),
+      h('button', { type: 'button', class: 'mini', 'aria-label': `Remove ${name}`, onclick: () => { list.splice(k, 1); changed(); } }, '✕')),
+    ...techRows(kids, depth + 1, name, changed, fields)];
+  });
 }
 
 // ---------- Train ----------
@@ -1014,15 +1072,25 @@ function drawTrain() {
 function exerciseCard(it, i, hist) {
   const e = BY.get(it.ex.toLowerCase());
   const again = fn => () => { fn(); saveDraft(); drawTrain(); };
-  const grid = h('div', { class: 'sets' }, h('span', {}), h('span', {}, 'Weight'), h('span', {}, 'Reps'));
+  const grid = h('div', { class: 'sets' }, h('span', {}), h('span', {}, 'Weight'), h('span', {}, 'Reps'), h('span', {}));
+  const fields = (n, name) => {
+    const box = (key, hint, mode) => h('input', { type: 'text', inputMode: mode, autocomplete: 'off', value: n[key] || '', placeholder: hint,
+      'aria-label': `${name} ${hint}`, oninput: ev => { n[key] = ev.target.value; saveDraft(); } });
+    return [n.t === 'myo' && box('rest', 'sec', 'numeric'), (n.t === 'myo' || n.t === 'drop') && box('w', 'lb', 'decimal'), box('r', 'reps', 'numeric'),
+      n.t === 'partial' && h('select', { 'aria-label': `${name} range of motion`, onchange: ev => { n.rom = Number(ev.target.value); saveDraft(); } },
+        ROMS.map(([text, v]) => new Option(text, v, false, v === (n.rom || 0.5))))];
+  };
   it.sets.forEach((s, j) => {
-    const prev = hist && hist.last.sets[j];
+    const prev = hist && hist.last.sets[j], kids = s.kids || (s.kids = []), what = `${it.ex} set ${j + 1}`;
     const cell = (key, label, mode) => h('input', {
       id: `t${i}${key}${j}`, type: 'text', inputMode: mode, autocomplete: 'off', value: s[key],
       placeholder: prev ? String(key === 'w' ? prev.weight : prev.reps) : '', 'aria-label': `${it.ex} set ${j + 1} ${label}`,
       oninput: ev => { s[key] = ev.target.value; saveDraft(); },
     });
-    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'));
+    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'),
+      h('button', { type: 'button', class: 'mini', 'aria-label': `Add a technique to ${what}`, disabled: kids.length >= 9,
+        onclick: () => addTech(kids, what, again(() => {})) }, '+'),
+      ...techRows(kids, 1, what, again(() => {}), fields));
   });
   return h('article', { class: 'card' },
     h('div', { class: 'between' }, h('h3', { style: 'text-transform:none' }, it.ex),
@@ -1038,20 +1106,20 @@ function exerciseCard(it, i, hist) {
     h('div', { class: 'step' },
       h('button', { type: 'button', 'aria-label': `One set fewer of ${it.ex}`, disabled: it.sets.length <= 1, onclick: again(() => it.sets.pop()) }, '−'),
       h('output', {}, `${it.sets.length} set${it.sets.length > 1 ? 's' : ''}`),
-      h('button', { type: 'button', 'aria-label': `One more set of ${it.ex}`, disabled: it.sets.length >= MAX_SETS, onclick: again(() => it.sets.push({ w: '', r: '' })) }, '+'),
+      h('button', { type: 'button', 'aria-label': `One more set of ${it.ex}`, disabled: it.sets.length >= MAX_SETS, onclick: again(() => it.sets.push({ w: '', r: '', kids: [] })) }, '+'),
       h('span', { class: 'hint' }, 'today only')),
     h('input', { id: `t${i}n`, type: 'text', autocomplete: 'off', placeholder: 'Notes', value: it.notes, 'aria-label': `${it.ex} notes`,
       oninput: ev => { it.notes = ev.target.value; saveDraft(); } }));
 }
 
-/** Swap for today only: same number of sets, the new exercise's own history and target. */
+/** Swap for today only: same sets and sub-sets, the new exercise's own history and target. */
 function swap(it, e) {
   openSheet(`Swap ${it.ex}`, [
     h('p', { class: 'hint' }, 'Today only. Your saved workout stays as it is.'),
     picker('sw', x => {
       it.ex = x.name;
       it.notes = '';
-      it.sets = it.sets.map(() => ({ w: '', r: '' }));
+      it.sets = it.sets.map(s => ({ w: '', r: '', kids: plan(s.kids) }));
       saveDraft();
       closeSheet();
       drawTrain();
@@ -1065,7 +1133,7 @@ function addToSession() {
     h('p', { class: 'hint' }, 'This session only. Your saved workout stays as it is.'),
     picker('ad', x => {
       const past = stats()(x.name), n = past ? Math.min(MAX_SETS, Math.max(1, past.last.sets.length)) : 3;
-      D.items.push({ ex: x.name, notes: '', sets: Array.from({ length: n }, () => ({ w: '', r: '' })) });
+      D.items.push({ ex: x.name, notes: '', sets: Array.from({ length: n }, () => ({ w: '', r: '', kids: [] })) });
       saveDraft();
       closeSheet();
       drawTrain();
@@ -1074,7 +1142,7 @@ function addToSession() {
 }
 
 async function dropItem(it) {
-  if ((it.notes || it.sets.some(s => s.w || s.r)) && !await ask(`Remove ${it.ex} and what you typed for it?`, 'Remove')) return;
+  if ((it.notes || it.sets.some(used)) && !await ask(`Remove ${it.ex} and what you typed for it?`, 'Remove')) return;
   D.items.splice(D.items.indexOf(it), 1);
   saveDraft();
   drawTrain();
@@ -1084,7 +1152,8 @@ function pickWorkout() {
   const w = S.workouts.find(x => x.name === $('tworkout').value);
   D.oneOff = $('tworkout').value === ONE_OFF;
   D.workout = w ? w.name : '';
-  D.items = w ? w.items.map(x => ({ ex: x.ex, notes: '', sets: Array.from({ length: x.sets }, () => ({ w: '', r: '' })) })) : [];
+  D.items = w ? w.items.map(x => ({ ex: x.ex, notes: '', // the planned sub-sets go on the last set
+    sets: Array.from({ length: x.sets }, (_, j) => ({ w: '', r: '', kids: j === x.sets - 1 ? plan(x.tech) : [] })) })) : [];
   say('tstatus', '');
   saveDraft();
   drawTrain();
@@ -1099,13 +1168,22 @@ async function saveSession() {
     if (FORMULA_START.test(workout)) return say('tstatus', 'The session name can\'t start with = + - or @.', 'err');
     if (body !== '' && (typeof body !== 'number' || body <= 0)) return say('tstatus', 'Body weight must be a positive number.', 'err');
     const out = [], errors = [];
+    const bad = (w, reps) => typeof w !== 'number' || w < 0 || typeof reps !== 'number' || reps <= 0 || !Number.isInteger(reps);
     D.items.forEach(it => it.sets.forEach((s, j) => {
-      const w = toNum(s.w), reps = toNum(s.r);
-      if (w === '' && reps === '') return;
-      if (typeof w !== 'number' || w < 0 || typeof reps !== 'number' || reps <= 0 || !Number.isInteger(reps)) {
-        return errors.push(`${it.ex} set ${j + 1}: weight "${w}", reps "${reps}"`);
-      }
-      out.push([date, workout, it.ex, j + 1, reps, w, it.notes.trim()]);
+      const w = toNum(s.w), reps = toNum(s.r), notes = it.notes.trim();
+      if (!used(s)) return;
+      if (bad(w, reps)) return errors.push(`${it.ex} set ${j + 1}: weight "${w}", reps "${reps}"`);
+      out.push([date, workout, it.ex, j + 1, reps, w, notes]);
+      // Sub-sets left blank were skipped on the day. A blank weight means the weight of the row above; only a drop needs its own.
+      const walk = (kids, path, above, where) => (kids || []).forEach((n, k) => {
+        const own = n.t === 'drop' || n.t === 'myo' ? toNum(n.w) : '', wt = own === '' && n.t !== 'drop' ? above : own;
+        const r = toNum(n.r), rest = n.t === 'myo' ? toNum(n.rest) : '', at = `${where} › ${TECH[n.t][1].toLowerCase()} ${k + 1}`;
+        if (!used(n)) return;
+        if (bad(wt, r) || (rest !== '' && !(rest >= 0))) return errors.push(`${at}: ${n.t === 'myo' ? `rest "${rest}", ` : ''}weight "${wt}", reps "${r}"`);
+        out.push([date, workout, it.ex, j + 1, r, wt, notes, path + (k + 1), n.t, rest, n.t === 'partial' ? n.rom || 0.5 : '']);
+        walk(n.kids, `${path}${k + 1}.`, wt, at);
+      });
+      walk(s.kids, '', w, `${it.ex} set ${j + 1}`);
     }));
     if (errors.length) return say('tstatus', `Nothing saved. Fix (weight and reps must be numbers, reps whole): ${errors.join('; ')}`, 'err');
     if (!out.length && body === '') return say('tstatus', 'Nothing to save: no sets or body weight entered.', 'err');
@@ -1117,8 +1195,8 @@ async function saveSession() {
     D = newDraft();
     saveDraft();
     refresh();
-    say('tstatus', `Saved ${added} set(s)${body !== '' ? ' and body weight' : ''} for ${date}.` +
-      (added < out.length ? ` ${out.length - added} set(s) were exact repeats of ones already logged and were skipped.` : ''), 'ok');
+    say('tstatus', `Saved ${added} set(s) and sub-set(s)${body !== '' ? ' and body weight' : ''} for ${date}.` +
+      (added < out.length ? ` ${out.length - added} were exact repeats of ones already logged and were skipped.` : ''), 'ok');
   } catch (err) {
     say('tstatus', `Not saved: ${msgOf(err)}`, 'err');
   }
@@ -1132,7 +1210,8 @@ function drawBuild() {
   $('bworkouts').replaceChildren(...S.workouts.map((w, i) => h('li', { class: 'card' },
     h('div', { class: 'between' },
       h('div', {}, h('h3', { style: 'text-transform:none' }, w.name),
-        h('p', { class: 'hint' }, `${w.items.length} exercise(s) · ${w.items.reduce((n, x) => n + x.sets, 0)} sets`)),
+        h('p', { class: 'hint' }, `${w.items.length} exercise(s) · ${w.items.reduce((n, x) => n + x.sets, 0)} sets` +
+          (w.items.some(x => count(x.tech)) ? ` · ${w.items.reduce((n, x) => n + count(x.tech), 0)} technique` : ''))),
       h('div', { class: 'acts' },
         h('button', { type: 'button', 'aria-label': `Edit ${w.name}`, onclick: () => edit(i) }, 'Edit'),
         h('button', { type: 'button', class: 'danger', 'aria-label': `Delete ${w.name}`, onclick: () => removeWorkout(i) }, 'Delete'))))));
@@ -1157,26 +1236,30 @@ function drawPicked() {
         h('div', {},
           mini('↑', `Move ${it.ex} up`, i === 0, () => B.items.splice(i - 1, 2, it, B.items[i - 1])),
           mini('↓', `Move ${it.ex} down`, i === B.items.length - 1, () => B.items.splice(i, 2, B.items[i + 1], it)),
-          mini('✕', `Remove ${it.ex}`, false, () => B.items.splice(i, 1)))));
+          mini('✕', `Remove ${it.ex}`, false, () => B.items.splice(i, 1)))),
+      ...techRows(it.tech, 0, `the last set of ${it.ex}`, drawPicked),
+      h('button', { type: 'button', disabled: it.tech.length >= 9, onclick: () => addTech(it.tech, `the last set of ${it.ex}`, drawPicked) }, 'Add a technique to the last set'));
   }));
   if (!B.items.length) $('bpicked').append(h('li', { class: 'hint', style: 'border:0;padding:0;background:none' }, 'Tap exercises above to add them.'));
   const { tot, unknown } = volume(B.items);
   const rows = Object.keys(tot).map(m => ({ m, ...tot[m] })).sort((a, b) => b.p + b.s - a.p - a.s || a.m.localeCompare(b.m));
-  const max = Math.max(SESSION_REF, ...rows.map(r => r.p + r.s));
+  const max = Math.max(SESSION_REF, ...rows.map(r => r.p + r.s + r.t));
   $('bpreview').replaceChildren(
-    h('p', { class: 'chips' }, h('span', {}, h('i', { class: 'dot' }), 'Primary · 1 per set'), h('span', {}, h('i', { class: 'dot s' }), 'Secondary · ½ per set')),
+    h('p', { class: 'chips' }, h('span', {}, h('i', { class: 'dot' }), 'Primary · 1 per set'), h('span', {}, h('i', { class: 'dot s' }), 'Secondary · ½ per set'),
+      rows.some(r => r.t) && h('span', {}, h('i', { class: 'dot t' }), 'Technique · shown after the +')),
     ...rows.map(r => h('div', { class: 'bar' }, h('span', {}, r.m),
       h('span', { class: 'track', 'aria-hidden': 'true' },
         r.p > 0 && h('i', { style: `width:${r.p / max * 100}%` }), r.s > 0 && h('i', { class: 's', style: `width:${r.s / max * 100}%` }),
+        r.t > 0 && h('i', { class: 't', style: `width:${r.t / max * 100}%` }),
         h('b', { style: `left:${SESSION_REF / max * 100}%` })),
-      h('span', { class: 'val', title: `${fmt(r.p)} primary + ${fmt(r.s)} secondary` }, fmt(r.p + r.s)))),
+      h('span', { class: 'val', title: `${fmt(r.p)} primary + ${fmt(r.s)} secondary` }, fmt(r.p + r.s) + (r.t ? ` + ${fmt(r.t)}` : '')))),
     h('p', { class: 'hint' }, rows.length ? `Line at ${SESSION_REF} sets per session is guidance, not a limit.` : 'Add exercises to see sets per muscle.'),
     ...(unknown.length ? [h('p', { class: 'status err' }, `Not in the exercise list, so not counted: ${unknown.join(', ')}`)] : []));
 }
 
 function edit(i) {
   B.editing = i;
-  B.items = S.workouts[i].items.map(x => ({ ...x }));
+  B.items = S.workouts[i].items.map(x => ({ ...x, tech: plan(x.tech) }));
   $('bname').value = S.workouts[i].name;
   say('bstatus', '');
   drawBuild();
@@ -1211,7 +1294,7 @@ function saveBuilt() {
     return say('bstatus', `A workout named "${title}" already exists. Nothing saved.`, 'err');
   }
   try {
-    const w = { name: title, items: B.items.map(x => ({ ex: x.ex, sets: x.sets })) };
+    const w = { name: title, items: B.items.map(x => ({ ex: x.ex, sets: x.sets, tech: plan(x.tech) })) };
     act({ t: 'workouts', workouts: B.editing == null ? S.workouts.concat(w) : S.workouts.map((x, i) => (i === B.editing ? w : x)) });
     resetBuild();
     drawTrain();
@@ -1256,8 +1339,10 @@ function drawHistory() {
 
 function dayCard(date, d) {
   const names = [...new Set(d.sets.map(r => r[1]).filter(Boolean))], byEx = new Map();
-  d.sets.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(`${r[5]} × ${r[4]}`));
-  const facts = [names.join(', '), d.sets.length && `${d.sets.length} set${d.sets.length > 1 ? 's' : ''}`, d.body.length && `body weight ${d.body.join(', ')}`];
+  d.sets.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}`
+    : `${'↳'.repeat(r[7].split('.').length)} ${r[8]} ${r[5]} × ${r[4]}${r[10] ? ` at ${r[10] * 100}% range` : ''}${r[9] === '' ? '' : ` after ${r[9]} s`}`));
+  const main = d.sets.filter(r => !r[8]).length, tech = d.sets.length - main;
+  const facts = [names.join(', '), main && `${main} set${main > 1 ? 's' : ''}`, tech && `${tech} technique`, d.body.length && `body weight ${d.body.join(', ')}`];
   return h('li', { class: 'card' },
     h('div', { class: 'between' },
       h('div', {}, h('h3', { style: 'text-transform:none' }, longDate(date)), h('p', { class: 'hint' }, facts.filter(Boolean).join(' · '))),
@@ -1318,7 +1403,7 @@ function parseCsv(text) {
 }
 
 /**
- * Reads one tab saved as CSV: Lifts (7 columns), Body_Weight (2), Exercises (header starts Exercise, Primary) or
+ * Reads one tab saved as CSV: Lifts (7 columns, or 11 with technique sub-sets), Body_Weight (2), Exercises (header starts Exercise, Primary) or
  * Workouts (one column per workout). Any bad row stops that file; exact repeats are skipped. Returns a message.
  */
 function importCsv(text) {
@@ -1329,9 +1414,9 @@ function importCsv(text) {
   if (head[0] !== 'date' && !rows.some(x => isDate(x.r[0]))) return importWorkouts(rows);
   if (!isDate(rows[0].r[0])) rows.shift(); // header row
   if (!rows.length) throw new Error('The file has no data rows.');
-  const width = rows[0].r.length, lifts = width === LIFT_COLS.length;
+  const width = rows[0].r.length, lifts = width === LIFT_COLS.length || width === LIFT_COLS.length + TECH_COLS.length;
   if (!lifts && width !== BW_COLS.length) {
-    throw new Error(`Expected ${LIFT_COLS.length} columns (${LIFT_COLS.join(', ')}) or ${BW_COLS.length} (${BW_COLS.join(', ')}), but found ${width}.`);
+    throw new Error(`Expected ${LIFT_COLS.length} columns (${LIFT_COLS.join(', ')}), those plus ${TECH_COLS.join(', ')}, or ${BW_COLS.length} (${BW_COLS.join(', ')}), but found ${width}.`);
   }
   const errors = [], parsed = [];
   rows.forEach(({ r, line }) => {
@@ -1347,7 +1432,11 @@ function importCsv(text) {
     if (!Number.isInteger(set) || set < 1) return bad(`set "${r[3]}" is not a whole number, 1 or more`);
     if (!Number.isInteger(reps) || reps < 1) return bad(`reps "${r[4]}" is not a whole number, 1 or more`);
     if (typeof wt !== 'number' || wt < 0) return bad(`weight "${r[5]}" is not a number, 0 or more`);
-    parsed.push([r[0], r[1], r[2], set, reps, wt, r[6]]);
+    const rest = toNum(r[9]), rom = toNum(r[10]);
+    if (!r[8]) return parsed.push([r[0], r[1], r[2], set, reps, wt, r[6]]);
+    if (!TECH[r[8]] || !SUB.test(r[7])) return bad(`technique "${r[8]}" or sub "${r[7]}" is not one this app writes`);
+    if (typeof rest === 'string' && rest || typeof rom === 'string' && rom) return bad(`rest_s "${r[9]}" or rom "${r[10]}" is not a number`);
+    parsed.push([r[0], r[1], r[2], set, reps, wt, r[6], r[7], r[8], rest, rom]);
   });
   if (errors.length) {
     throw new Error(`Nothing imported. ${errors.length} row(s) need fixing: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '; …' : ''}`);
@@ -1489,7 +1578,7 @@ $('bcancel').addEventListener('click', () => { say('bstatus', ''); resetBuild();
 $('hpast').addEventListener('click', () => { setView('Train'); $('tdate').focus(); });
 $('hmore').addEventListener('click', () => { hist.shown += 40; drawHistory(); });
 $('hnew').addEventListener('click', () => exerciseForm({}));
-$('expLifts').addEventListener('click', () => exportCsv('lifts.csv', LIFT_COLS, S.lifts));
+$('expLifts').addEventListener('click', () => exportCsv('lifts.csv', LIFT_COLS.concat(TECH_COLS), S.lifts.map(r => r.concat('', '', '', '').slice(0, 11))));
 $('expBw').addEventListener('click', () => exportCsv('body_weight.csv', BW_COLS, S.bw));
 $('expEx').addEventListener('click', () => exportCsv('exercises.csv', ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic'],
   ALL.filter(e => e.custom).map(e => [e.name, e.primary.join(', '), e.secondary.join(', '), e.equipment === 'none listed' ? '' : e.equipment, e.mechanic || ''])));
@@ -1517,7 +1606,7 @@ $('imp').addEventListener('change', async ev => {
   refresh();
   ev.target.value = '';
 });
-const buildPicker = picker('b', e => { B.items.push({ ex: e.name, sets: 3 }); drawPicked(); });
+const buildPicker = picker('b', e => { B.items.push({ ex: e.name, sets: 3, tech: [] }); drawPicked(); });
 $('bpicker').append(buildPicker);
 window.addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });

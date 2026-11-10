@@ -11,14 +11,16 @@
 const TABS = {
   Profiles: { cols: ['profile', 'salt', 'passcode_hash', 'created'], text: [[1, 4]] },
   Exercises: { cols: ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic', 'added_by'], text: [[1, 6]] },
-  Workouts: { cols: ['profile', 'workout', 'position', 'exercise', 'sets'], text: [[1, 2], [4, 1]] },
-  Lifts: { cols: ['profile', 'date', 'workout', 'exercise', 'set', 'reps', 'weight_lb', 'notes'], text: [[1, 4], [8, 1]] },
+  Workouts: { cols: ['profile', 'workout', 'position', 'exercise', 'sets', 'techniques'], text: [[1, 2], [4, 1], [6, 1]] },
+  // A row with `technique` filled in is an intensity-technique sub-set of that set; `sub` is its place under the set (2.1 = first one nested under the second).
+  Lifts: { cols: ['profile', 'date', 'workout', 'exercise', 'set', 'reps', 'weight_lb', 'notes', 'sub', 'technique', 'rest_s', 'rom'], text: [[1, 4], [8, 3]] },
   Body_Weight: { cols: ['profile', 'date', 'body_weight_lb'], text: [[1, 2]] },
   Config: { cols: ['key', 'value'], text: [[1, 2]] },
 };
 const MUSCLES = ['abdominals', 'abductors', 'adductors', 'biceps', 'calves', 'chest', 'forearms', 'glutes', 'hamstrings', 'lats', 'lower back', 'middle back', 'neck', 'quadriceps', 'shoulders', 'traps', 'triceps'];
 const EQUIP = ['bands', 'barbell', 'body only', 'cable', 'dumbbell', 'e-z curl bar', 'exercise ball', 'foam roll', 'kettlebells', 'machine', 'medicine ball', 'none listed', 'other'];
 const MECHANICS = ['', 'compound', 'isolation'];
+const TECHNIQUES = ['partial', 'myo', 'rest-pause', 'drop'], SUB = /^[1-9](\.[1-9]){0,2}$/;
 const FORMULA_START = /^[=+\-@]/; // Sheets would run these as formulas, so they are stored behind an apostrophe
 const MAX = { ops: 200, rows: 20000, name: 80, notes: 500, workouts: 60, items: 40, sets: 10 };
 
@@ -66,7 +68,8 @@ function fail(message, code) {
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.keys(TABS).forEach(name => {
-    const def = TABS[name], sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    const def = TABS[name], sh = ss.getSheetByName(name) || ss.insertSheet(name), short = def.cols.length - sh.getMaxColumns();
+    if (short > 0) sh.insertColumnsAfter(sh.getMaxColumns(), short);
     sh.getRange(1, 1, 1, def.cols.length).setValues([def.cols]);
     sh.setFrozenRows(1);
     def.text.forEach(([col, n]) => sh.getRange(2, col, sh.getMaxRows() - 1, n).setNumberFormat('@'));
@@ -228,14 +231,28 @@ function label(v, what, max, required) {
   return s;
 }
 
-/** Client lift row: [date, workout, exercise, set, reps, weight, notes]. */
+/** Client lift row: [date, workout, exercise, set, reps, weight, notes], and for a technique sub-set also [sub, technique, rest_s, rom]. */
 function cleanLift(r) {
-  if (!Array.isArray(r) || r.length !== 7) throw fail('A set row does not have 7 values.');
+  if (!Array.isArray(r) || (r.length !== 7 && r.length !== 11)) throw fail('A set row does not have 7 or 11 values.');
   if (!isDate(r[0])) throw fail('"' + r[0] + '" is not a yyyy-mm-dd date.');
   if (!whole(r[3], 1, 99)) throw fail('Set "' + r[3] + '" is not a whole number, 1 or more.');
   if (!whole(r[4], 1, 9999)) throw fail('Reps "' + r[4] + '" is not a whole number, 1 or more.');
   if (typeof r[5] !== 'number' || !(r[5] >= 0) || r[5] > 99999) throw fail('Weight "' + r[5] + '" is not a number, 0 or more.');
-  return [r[0], label(r[1], 'Workout name', MAX.name), label(r[2], 'Exercise', MAX.name, true), r[3], r[4], r[5], label(r[6], 'Notes', MAX.notes)];
+  const row = [r[0], label(r[1], 'Workout name', MAX.name), label(r[2], 'Exercise', MAX.name, true), r[3], r[4], r[5], label(r[6], 'Notes', MAX.notes)];
+  if (r.length === 7) return row;
+  const blankOr = (v, lo, hi) => v === '' || (typeof v === 'number' && v >= lo && v <= hi);
+  if (TECHNIQUES.indexOf(r[8]) < 0 || typeof r[7] !== 'string' || !SUB.test(r[7])) throw fail('Technique "' + r[8] + '" at "' + r[7] + '" is not a sub-set this log knows.');
+  if (!blankOr(r[9], 0, 3600)) throw fail('Rest "' + r[9] + '" is not a number of seconds.');
+  if (!blankOr(r[10], 0.01, 1)) throw fail('Range of motion "' + r[10] + '" is not a share of the range, up to 1.');
+  return row.concat([r[7], r[8], r[9], r[10]]);
+}
+/** A saved workout's planned sub-sets for an exercise's last set: [{ t, kids }], up to 3 levels deep and 9 per level. */
+function cleanTech(list, depth) {
+  if (!Array.isArray(list) || list.length > 9 || (depth > 3 && list.length)) throw fail('A planned technique is not valid.');
+  return list.map(n => {
+    if (!n || TECHNIQUES.indexOf(n.t) < 0) throw fail('A planned technique is not one this log knows.');
+    return { t: n.t, kids: cleanTech(n.kids || [], depth + 1) };
+  });
 }
 function cleanBw(r) {
   if (!Array.isArray(r) || r.length !== 2) throw fail('A body-weight row does not have 2 values.');
@@ -257,7 +274,7 @@ function cleanWorkouts(ws) {
     if (!Array.isArray(w.items) || !w.items.length || w.items.length > MAX.items) throw fail('"' + name + '" needs 1 to ' + MAX.items + ' exercises.');
     return { name: name, items: w.items.map(it => {
       if (!whole(it && it.sets, 1, MAX.sets)) throw fail('"' + name + '" has an exercise without 1 to ' + MAX.sets + ' sets.');
-      return { ex: label(it.ex, 'Exercise', MAX.name, true), sets: it.sets };
+      return { ex: label(it.ex, 'Exercise', MAX.name, true), sets: it.sets, tech: cleanTech(it.tech || [], 1) };
     }) };
   });
 }
@@ -277,9 +294,17 @@ function cleanExercise(x) {
 /** A sheet row as the client's row, or null when it is not usable (blank line, half-typed row). */
 function liftFromSheet(r) {
   try {
-    return cleanLift([str(r[1]), str(r[2]), str(r[3]), num(r[4]), num(r[5]), num(r[6]), str(r[7])]);
+    const row = [str(r[1]), str(r[2]), str(r[3]), num(r[4]), num(r[5]), num(r[6]), str(r[7])], opt = v => (str(v) === '' ? '' : num(v));
+    return cleanLift(key(r[9]) ? row.concat([str(r[8]), key(r[9]), opt(r[10]), opt(r[11])]) : row);
   } catch (err) {
     return null;
+  }
+}
+function techFromSheet(v) {
+  try {
+    return cleanTech(JSON.parse(str(v) || '[]'), 1);
+  } catch (err) {
+    return [];
   }
 }
 function bwFromSheet(r) {
@@ -321,7 +346,7 @@ function sync(req) {
       seen[kind].add(k);
       return true;
     });
-    appendRows(tabName, fresh.map(r => [profile.name].concat(r)));
+    appendRows(tabName, fresh.map(r => [profile.name].concat(r, '', '', '', '').slice(0, TABS[tabName].cols.length))); // a straight set leaves the technique columns blank
     fresh.forEach(r => have.push(r));
   };
   const ownerOf = name => {
@@ -334,7 +359,7 @@ function sync(req) {
     workouts: op => {
       const ws = cleanWorkouts(op.workouts);
       removeRows('Workouts', mine);
-      appendRows('Workouts', [].concat.apply([], ws.map(w => w.items.map((it, i) => [profile.name, w.name, i + 1, it.ex, it.sets]))));
+      appendRows('Workouts', [].concat.apply([], ws.map(w => w.items.map((it, i) => [profile.name, w.name, i + 1, it.ex, it.sets, it.tech.length ? JSON.stringify(it.tech) : '']))));
     },
     exercise: op => {
       const x = cleanExercise(op.ex), owner = ownerOf(x.name);
@@ -372,7 +397,7 @@ function sync(req) {
 
   const workouts = [];
   readRows('Workouts').filter(mine)
-    .map(r => ({ name: str(r[1]), pos: num(r[2]), ex: str(r[3]), sets: num(r[4]) }))
+    .map(r => ({ name: str(r[1]), pos: num(r[2]), ex: str(r[3]), sets: num(r[4]), tech: techFromSheet(r[5]) }))
     .filter(r => r.name && r.ex && whole(r.sets, 1, MAX.sets))
     .forEach(r => {
       let w = workouts.filter(x => x.name.toLowerCase() === r.name.toLowerCase())[0];
@@ -380,7 +405,7 @@ function sync(req) {
       w.items.push(r);
     });
   workouts.forEach(w => {
-    w.items = w.items.sort((a, b) => (a.pos || 0) - (b.pos || 0)).map(r => ({ ex: r.ex, sets: r.sets }));
+    w.items = w.items.sort((a, b) => (a.pos || 0) - (b.pos || 0)).map(r => ({ ex: r.ex, sets: r.sets, tech: r.tech }));
   });
 
   return {
