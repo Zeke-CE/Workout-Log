@@ -74,6 +74,7 @@
   .step output { min-width: 58px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
   /* Lists */
   .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .bm { width: 170px; margin: 0 auto; } /* the body map is 35 × 93, so its width sets its height */
   .pick { width: 100%; text-align: left; font-weight: 500; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; }
   .picked li { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--field); }
   .ctl { display: flex; justify-content: space-between; gap: 6px; }
@@ -142,6 +143,15 @@
     <div id="range" class="seg" role="group" aria-label="Time range"></div>
     <div id="metric" class="seg" role="group" aria-label="What to show"></div>
     <div id="key" class="card key"></div>
+    <div id="map" class="card" hidden>
+      <h3>Sets per muscle</h3>
+      <div id="mapSide" class="seg" role="group" aria-label="Body side"></div>
+      <div class="between"><button id="mapPrev" class="mini" type="button" aria-label="Earlier week">‹</button><span id="mapWeek"></span><button id="mapNext" class="mini" type="button" aria-label="Later week">›</button></div>
+      <div id="mapBody" class="bm"></div>
+      <p id="mapStatus" class="status" role="status" aria-live="polite"></p>
+      <ul id="mapList" class="list key"></ul>
+      <p class="hint"><a href="https://repdb.co" target="_blank" rel="nofollow noopener">Exercise data by RepDB (repdb.co)</a></p>
+    </div>
     <div id="charts" class="stack"></div>
     <details>
       <summary>Where the numbers come from</summary>
@@ -166,6 +176,11 @@
           (<a href="https://doi.org/10.47206/ijsc.v3i1.182" target="_blank" rel="noopener">Wolf et al. 2023</a>).</li>
         <li>No study gives a conversion from a technique sub-set to a straight set, so sub-sets are tallied on their own (grey) with the same 1 and ½ weighting and are not added to the set totals or compared with the guide lines. Their weight × reps does count toward Load, with partial reps scaled by their share of the range. Bests, targets and Strength use straight sets only.</li>
         <li>Exercises and muscle tags: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (public domain), pinned at commit f00c92c.</li>
+        <li>Sets per muscle (the body map) uses the finer muscle lists from <a href="https://repdb.co" target="_blank" rel="nofollow noopener">RepDB</a> (free tier, commit 66c4298), with the same 1 and ½ counting and straight sets only.
+          Your browser downloads that file from RepDB, and only exercises whose name matches a RepDB name exactly are counted. The map's color scale tops out at the busiest muscle-week in the range.
+          The map (<a href="https://github.com/vulovix/body-muscles" target="_blank" rel="noopener">body-muscles</a> 1.0.0, Apache-2.0) has no region for some muscles, so these are drawn on the nearest one and marked "approx." in the list:
+          rotator cuff, rhomboids, brachialis, brachioradialis, hip abductors and the deep abdominal muscle. Placement follows
+          <a href="https://openstax.org/books/anatomy-and-physiology-2e/pages/11-introduction" target="_blank" rel="noopener">OpenStax Anatomy &amp; Physiology 2e, ch. 11</a>.</li>
       </ul>
     </details>
   </section>
@@ -910,7 +925,7 @@ function unknownBox(names) {
 
 const RANGES = [['4 wk', 4], ['12 wk', 12], ['6 mo', 26], ['1 yr', 52]];
 const METRICS = [['Sets', 'sets'], ['Load', 'load'], ['Strength', 'strength']];
-const view = { weeks: 12, metric: 'sets' };
+const view = { weeks: 12, metric: 'sets', side: 'FRONT', back: 0 }; // back = muscle-map week, counted back from this week
 
 function segment(id, options, prop) {
   $(id).replaceChildren(...options.map(([label, value]) => h('button', {
@@ -990,6 +1005,8 @@ function drawTrends() {
   segment('range', RANGES, 'weeks');
   segment('metric', METRICS, 'metric');
   const t = trendData(view.weeks), names = Object.keys(t.M), cards = [], sets = view.metric === 'sets';
+  $('map').hidden = !sets;
+  if (sets) drawMap();
   const total = a => a.reduce((x, y) => x + y, 0);
   const keyLine = (cls, text) => h('p', {}, h('i', { class: cls }), h('span', {}, text));
   if (view.metric === 'strength') {
@@ -1025,6 +1042,198 @@ function drawTrends() {
   if (t.unknown.length) cards.push(unknownBox(t.unknown));
   $('charts').replaceChildren(...cards);
   $('demo').hidden = !S.demo;
+}
+
+// ---------- Muscle map (Trends → Sets) ----------
+// Finer muscle lists from RepDB, drawn with body-muscles. Neither is stored in this repository: each browser downloads RepDB's
+// file from RepDB's own repository at a fixed commit (license term 1 allows in-app use; term 3 forbids redistributing it as a
+// dataset) and keeps only the muscle lists in localStorage, so the 2.6 MB file downloads once per device.
+const REPDB_SHA = '66c4298af8d99b9dc397dad6699e508fb871d249', REPDB_KEY = 'workoutlog.repdb.' + REPDB_SHA.slice(0, 7);
+const REPDB_URLS = [
+  ...(/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? ['backend/RepDB_Exercise_Dataset.json'] : []), // local, git-ignored copy
+  `https://raw.githubusercontent.com/RepDB/exercise-dataset/${REPDB_SHA}/exercises.json`];
+const BM_SRC = 'https://cdn.jsdelivr.net/npm/body-muscles@1.0.0/dist/umd/body-muscles.umd.min.js';
+const BM_SRI = 'sha384-TiJRzXzqcxvNgiBKWWkxSCFrWUGxw0O83AYli/tNrFXIl2xxMX4P3PyqtIjUQDgj'; // hash of the npm 1.0.0 file
+// RepDB muscle → [body-map regions (drawn on both sides), app muscle group, why the placement is approximate, or null].
+// Placement follows OpenStax Anatomy & Physiology 2e, ch. 11. The map refuses to draw if RepDB uses a muscle missing here.
+const XWALK = {
+  abductors: [['gluteus-medius'], 'abductors', 'drawn on gluteus medius, the main hip abductor'],
+  adductors: [['adductors'], 'adductors', null],
+  anterior_deltoid: [['shoulder-front'], 'shoulders', null],
+  biceps_brachii: [['biceps'], 'biceps', null],
+  brachialis: [['biceps'], 'biceps', 'lies under the biceps'],
+  brachioradialis: [['forearm'], 'forearms', 'drawn on the front forearm'],
+  erector_spinae: [['lower-back-erectors'], 'lower back', null],
+  forearm_extensors: [['forearm-extensors'], 'forearms', null],
+  forearm_flexors: [['forearm-flexors'], 'forearms', null],
+  forearms: [['forearm', 'forearm-flexors', 'forearm-extensors'], 'forearms', null],
+  gastrocnemius: [['calves-gastroc-lateral', 'calves-gastroc-medial'], 'calves', null],
+  gluteus_maximus: [['gluteus-maximus'], 'glutes', null],
+  gluteus_medius: [['gluteus-medius'], 'glutes', null],
+  hamstrings: [['hamstrings-lateral', 'hamstrings-medial'], 'hamstrings', null],
+  hip_flexors: [['hip-flexor'], 'quadriceps', null],
+  infraspinatus_teres_minor: [['deltoid-rear'], 'shoulders', 'no rotator-cuff region; drawn on the rear delt beside it'],
+  lateral_deltoid: [['shoulder-side'], 'shoulders', null],
+  latissimus_dorsi: [['lats-upper', 'lats-mid', 'lats-lower'], 'lats', null],
+  obliques: [['obliques'], 'abdominals', null],
+  pectoralis_major: [['chest-upper', 'chest-lower'], 'chest', null],
+  posterior_deltoid: [['deltoid-rear'], 'shoulders', null],
+  quadratus_lumborum: [['lower-back-ql'], 'lower back', null],
+  quadriceps: [['quads'], 'quadriceps', null],
+  rectus_abdominis: [['abs-upper', 'abs-lower'], 'abdominals', null],
+  rhomboids: [['traps-mid'], 'middle back', 'lie under the middle trapezius'],
+  serratus_anterior: [['serratus-anterior'], 'chest', null],
+  soleus: [['calves-soleus'], 'calves', null],
+  supraspinatus: [['traps-upper'], 'shoulders', 'no rotator-cuff region; lies under the upper trapezius'],
+  tibialis_anterior: [['tibialis-anterior'], 'calves', null],
+  transverse_abdominis: [['abs-upper', 'abs-lower'], 'abdominals', 'deep muscle; drawn on the abs over it'],
+  trapezius: [['traps-upper', 'traps-mid', 'traps-lower'], 'traps', null],
+  triceps_brachii: [['triceps-long', 'triceps-lateral'], 'triceps', null],
+};
+// Your exercise name (lowercase) → RepDB id, for names with no exact RepDB match. Filled in by hand from the exercises
+// logged so far. "nearest" = RepDB has no such exercise, so the closest one by equipment and movement is used.
+const REPDB_ALIAS = {
+  'ab crunch machine': 'machine-seated-crunch',
+  'assisted dip': 'assisted-dips',
+  'assisted pull-up': 'assisted-pull-ups',
+  'butterfly': 'pec-deck',
+  'cable bar overhead triceps extension': 'cable-overhead-tricep-extension',
+  'cable hammer curls - rope attachment': 'cable-hammer-curl',
+  'chest supported t-bar row': 'chest-supported-machine-row', // nearest: no chest-supported T-bar row
+  'leg extensions': 'leg-extension',
+  'leverage high row': 'chest-supported-machine-row', // nearest: no high row
+  'leverage shrug': 'plate-loaded-shrug',
+  'machine shoulder (military) press': 'machine-shoulder-press',
+  'pendulum squat': 'hack-squat', // nearest: no pendulum squat
+  'pullover machine': 'db-pullover', // nearest: no machine pullover
+  'reverse machine flyes': 'machine-reverse-fly',
+  'row machine (high handle)': 'chest-supported-machine-row', // nearest: grip height not distinguished
+  'row machine (low handle)': 'chest-supported-machine-row', // nearest: grip height not distinguished
+  'standing calf raises': 'standing-calf-raise',
+  'triceps pushdown': 'tricep-pushdown',
+  'wide-grip chest press machine': 'chest-press-machine',
+};
+const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+const RD = { idx: null, err: '', note: '', busy: false, chart: null };
+const unmapped = byId => [...new Set(Object.values(byId).flat(2))].filter(m => !XWALK[m]).sort();
+
+/** RepDB file → { byId: id → [primary, secondary], byName: normalized name → id }. Missing muscle lists count as none and are logged. */
+function repdbIndex(data) {
+  const list = data && data.exercises;
+  if (!Array.isArray(list) || !list.length) throw new Error('The RepDB file has no exercise list.');
+  const byId = {}, byName = {}, gaps = { primary_muscles: [], secondary_muscles: [] };
+  list.forEach((e, i) => {
+    if (!e || typeof e.id !== 'string' || typeof e.name_en !== 'string') throw new Error(`RepDB record ${i} has no id or English name.`);
+    const get = k => (Array.isArray(e[k]) ? e[k] : (gaps[k].push(e.id), []));
+    byId[e.id] = [get('primary_muscles'), get('secondary_muscles')];
+    const n = norm(e.name_en);
+    byName[n] = n in byName ? null : e.id; // null: two RepDB exercises share the name, so neither is picked
+  });
+  Object.entries(gaps).forEach(([k, ids]) => ids.length && console.warn(`RepDB: ${ids.length} exercises have no ${k}, counted as none: ${ids.join(', ')}`));
+  const dup = Object.keys(byName).filter(n => byName[n] === null);
+  if (dup.length) console.warn(`RepDB: names shared by more than one exercise, left unmatched: ${dup.join(', ')}`);
+  return { byId, byName };
+}
+
+async function repdbData() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REPDB_KEY));
+    if (saved && saved.byId && saved.byName) return saved;
+  } catch (err) { console.warn('RepDB: no saved copy could be read, downloading.', err); }
+  const errs = [];
+  for (const url of REPDB_URLS) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const idx = repdbIndex(await res.json());
+      try { localStorage.setItem(REPDB_KEY, JSON.stringify(idx)); } catch (err) {
+        RD.note = `The muscle lists could not be saved in this browser (${msgOf(err)}), so they download again next time.`;
+        console.warn(RD.note);
+      }
+      return idx;
+    } catch (err) {
+      errs.push(`${url}: ${msgOf(err)}`);
+      console.warn('RepDB: download failed.', url, err);
+    }
+  }
+  throw new Error(`The RepDB exercise data could not be downloaded. ${errs.join(' · ')}`);
+}
+
+const loadScript = (src, integrity) => new Promise((ok, fail) => document.head.append(h('script', {
+  src, integrity, crossOrigin: 'anonymous', onload: ok,
+  onerror: () => fail(new Error(`The body map could not be loaded from ${new URL(src).host}.`)) })));
+
+function loadMap() {
+  if (RD.busy || RD.idx || RD.err) return;
+  RD.busy = true;
+  Promise.all([window.BodyMuscles ? null : loadScript(BM_SRC, BM_SRI), repdbData()]).then(([, idx]) => {
+    const miss = unmapped(idx.byId);
+    if (miss.length) throw new Error(`RepDB muscles with no place on the map: ${miss.join(', ')}. Add them to XWALK.`);
+    const have = new Set([...BodyMuscles.FRONT_MUSCLES, ...BodyMuscles.BACK_MUSCLES].map(m => m.id));
+    const bad = Object.entries(XWALK).flatMap(([m, [regions, group]]) => [
+      ...regions.filter(r => !have.has(r + '-left') || !have.has(r + '-right')).map(r => `${m} → region ${r}`),
+      ...(MUSCLES.includes(group) ? [] : [`${m} → group ${group}`])]);
+    if (bad.length) throw new Error(`Muscle map entries that do not exist: ${bad.join(', ')}.`);
+    RD.idx = idx;
+  }).catch(err => { RD.err = msgOf(err); console.error('Muscle map:', err); })
+    .finally(() => { RD.busy = false; if (!$('vTrends').hidden && view.metric === 'sets') drawMap(); });
+}
+
+/** Weekly fractional sets per RepDB muscle: 1 per set where it is primary, ½ where secondary (Pelland et al. 2024). Straight sets only. */
+function muscleWeeks(lifts, weeks, idx) {
+  const start = monday(dayNum(today())) - 7 * (weeks - 1), M = {}, unmatched = new Set();
+  const add = (m, k, i, v) => { (M[m] || (M[m] = { p: Array(weeks).fill(0), s: Array(weeks).fill(0) }))[k][i] += v; };
+  lifts.forEach(([date, , exercise, , , , , , tech]) => {
+    const i = (monday(dayNum(date)) - start) / 7;
+    if (tech || i < 0 || i >= weeks) return;
+    const id = REPDB_ALIAS[exercise.trim().toLowerCase()] || idx.byName[norm(exercise)], e = id && idx.byId[id];
+    if (!e) return unmatched.add(exercise.trim());
+    e[0].forEach(m => add(m, 'p', i, 1));
+    e[1].forEach(m => add(m, 's', i, 0.5));
+  });
+  return { start, M, unmatched: [...unmatched].sort() };
+}
+
+function drawMap() {
+  segment('mapSide', [['Front', 'FRONT'], ['Back', 'BACK']], 'side');
+  const ready = !!(RD.idx && window.BodyMuscles && !RD.err);
+  ['mapSide', 'mapPrev', 'mapWeek', 'mapNext', 'mapBody'].forEach(id => { $(id).hidden = !ready; });
+  if (!ready) {
+    say('mapStatus', RD.err || 'Loading the muscle map…', RD.err ? 'err' : '');
+    $('mapList').replaceChildren(...(RD.err ? [h('li', {}, h('button', { type: 'button', onclick: () => { RD.err = ''; drawMap(); } }, 'Try again'))] : []));
+    return loadMap();
+  }
+  view.back = Math.min(view.back, view.weeks - 1);
+  const w = muscleWeeks(S.lifts, view.weeks, RD.idx), i = view.weeks - 1 - view.back, names = Object.keys(w.M);
+  const tot = (m, j) => w.M[m].p[j] + w.M[m].s[j];
+  const max = Math.max(0, ...names.flatMap(m => w.M[m].p.map((_, j) => tot(m, j)))); // busiest muscle-week in the range = 10
+  const bodyState = {};
+  names.forEach(m => {
+    if (!tot(m, i)) return;
+    const intensity = Math.max(1, Math.round(tot(m, i) / max * 10));
+    XWALK[m][0].forEach(r => ['-left', '-right'].forEach(side => { // a region shared by two muscles shows the higher one
+      if (!bodyState[r + side] || bodyState[r + side].intensity < intensity) bodyState[r + side] = { intensity, selected: false };
+    }));
+  });
+  try {
+    const opts = { view: view.side, bodyState, ariaLabel: 'Muscle map, sets this week' };
+    if (RD.chart) RD.chart.update(opts); else RD.chart = new BodyMuscles.BodyChart($('mapBody'), opts);
+  } catch (err) {
+    RD.err = `The body map could not be drawn: ${msgOf(err)}`;
+    console.error('Muscle map:', err);
+    return drawMap();
+  }
+  $('mapWeek').textContent = `Week of ${shortDate(w.start + 7 * i)}`;
+  $('mapPrev').disabled = view.back >= view.weeks - 1;
+  $('mapNext').disabled = view.back === 0;
+  const shown = names.filter(m => tot(m, i)).sort((a, b) => tot(b, i) - tot(a, i) || a.localeCompare(b));
+  $('mapList').replaceChildren(...shown.map(m => h('li', { class: 'read' },
+    h('span', {}, h('b', {}, `${m.replace(/_/g, ' ')} ${fmt(tot(m, i))}`)),
+    h('span', {}, h('i', { class: 'dot' }), `${fmt(w.M[m].p[i])} primary`),
+    h('span', {}, h('i', { class: 'dot s' }), `${fmt(w.M[m].s[i])} secondary`),
+    h('span', {}, XWALK[m][2] ? `${XWALK[m][1]} · approx.: ${XWALK[m][2]}` : XWALK[m][1]))));
+  say('mapStatus', [RD.note, !shown.length && 'No matched sets this week.',
+    w.unmatched.length && `Left off the map because no RepDB exercise has the same name (this range): ${w.unmatched.join(', ')}.`].filter(Boolean).join(' '));
 }
 
 // ---------- Intensity-technique sub-sets (Train and Build) ----------
@@ -1606,7 +1815,9 @@ $('imp').addEventListener('change', async ev => {
   refresh();
   ev.target.value = '';
 });
-const buildPicker = picker('b', e => { B.items.push({ ex: e.name, sets: 3, tech: [] }); drawPicked(); });
+$('mapPrev').addEventListener('click', () => { view.back = Math.min(view.weeks - 1, view.back + 1); drawTrends(); });
+$('mapNext').addEventListener('click', () => { view.back = Math.max(0, view.back - 1); drawTrends(); });
+const buildPicker = picker('b',e => { B.items.push({ ex: e.name, sets: 3, tech: [] }); drawPicked(); });
 $('bpicker').append(buildPicker);
 window.addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
