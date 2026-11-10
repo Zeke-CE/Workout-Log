@@ -10,7 +10,7 @@
 // cols = header row. text = [first column, how many] runs that hold text or dates and are kept as plain text.
 const TABS = {
   Profiles: { cols: ['profile', 'salt', 'passcode_hash', 'created'], text: [[1, 4]] },
-  Exercises: { cols: ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic', 'added_by'], text: [[1, 6]] },
+  Exercises: { cols: ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic', 'added_by', 'Primary_muscles', 'Secondary_muscles'], text: [[1, 8]] },
   Workouts: { cols: ['profile', 'workout', 'position', 'exercise', 'sets', 'techniques'], text: [[1, 2], [4, 1], [6, 1]] },
   // A row with `technique` filled in is an intensity-technique sub-set of that set; `sub` is its place under the set (2.1 = first one nested under the second).
   Lifts: { cols: ['profile', 'date', 'workout', 'exercise', 'set', 'reps', 'weight_lb', 'notes', 'sub', 'technique', 'rest_s', 'rom'], text: [[1, 4], [8, 3]] },
@@ -18,6 +18,11 @@ const TABS = {
   Config: { cols: ['key', 'value'], text: [[1, 2]] },
 };
 const MUSCLES = ['abdominals', 'abductors', 'adductors', 'biceps', 'calves', 'chest', 'forearms', 'glutes', 'hamstrings', 'lats', 'lower back', 'middle back', 'neck', 'quadriceps', 'shoulders', 'traps', 'triceps'];
+// The exact muscles an added exercise can list: the keys of XWALK in index.html. Primary_muscles/Secondary_muscles hold these; Primary/Secondary hold their groups.
+const FINE = ['abductors', 'adductors', 'neck', 'anterior_deltoid', 'biceps_brachii', 'brachialis', 'brachioradialis', 'erector_spinae', 'forearm_extensors', 'forearm_flexors', 'forearms',
+  'gastrocnemius', 'gluteus_maximus', 'gluteus_medius', 'hamstrings', 'hip_flexors', 'infraspinatus_teres_minor', 'lateral_deltoid', 'latissimus_dorsi', 'obliques', 'pectoralis_major',
+  'posterior_deltoid', 'quadratus_lumborum', 'quadriceps', 'rectus_abdominis', 'rhomboids', 'serratus_anterior', 'soleus', 'supraspinatus', 'tibialis_anterior', 'transverse_abdominis',
+  'trapezius', 'triceps_brachii'];
 const EQUIP = ['bands', 'barbell', 'body only', 'cable', 'dumbbell', 'e-z curl bar', 'exercise ball', 'foam roll', 'kettlebells', 'machine', 'medicine ball', 'none listed', 'other'];
 const MECHANICS = ['', 'compound', 'isolation'];
 const TECHNIQUES = ['partial', 'myo', 'rest-pause', 'drop'], SUB = /^[1-9](\.[1-9]){0,2}$/;
@@ -288,7 +293,13 @@ function cleanExercise(x) {
   if (!primary.length) throw fail('"' + name + '" needs at least one primary muscle.');
   if (EQUIP.indexOf(x.equipment) < 0) throw fail('Equipment for "' + name + '" is not from the equipment list.');
   if (MECHANICS.indexOf(x.mechanic) < 0) throw fail('Mechanic for "' + name + '" must be compound, isolation or blank.');
-  return { name: name, primary: primary, secondary: muscles(x.secondary, 'Secondary').filter(m => primary.indexOf(m) < 0), equipment: x.equipment, mechanic: x.mechanic };
+  const out = { name: name, primary: primary, secondary: muscles(x.secondary, 'Secondary').filter(m => primary.indexOf(m) < 0), equipment: x.equipment, mechanic: x.mechanic };
+  if (x.fine == null) return out; // an older client, or an import without exact muscles
+  const f = x.fine, ok = Array.isArray(f) && f.length === 2 && f.every(v => Array.isArray(v) && v.length <= FINE.length && v.every(m => FINE.indexOf(m) >= 0));
+  if (!ok || !f[0].length) throw fail('The exact muscles for "' + name + '" must be from the muscle list, with at least one primary.');
+  const pf = f[0].filter((m, i) => f[0].indexOf(m) === i);
+  out.fine = [pf, f[1].filter((m, i) => f[1].indexOf(m) === i && pf.indexOf(m) < 0)];
+  return out;
 }
 
 /** A sheet row as the client's row, or null when it is not usable (blank line, half-typed row). */
@@ -317,13 +328,14 @@ function bwFromSheet(r) {
 function exerciseFromSheet(r, me) {
   const primary = list(r[1]).filter(m => MUSCLES.indexOf(m) >= 0), equipment = key(r[3]), mechanic = key(r[4]);
   if (!str(r[0]) || !primary.length) return null;
-  return {
+  const pf = list(r[6]).filter(m => FINE.indexOf(m) >= 0), sf = list(r[7]).filter(m => FINE.indexOf(m) >= 0 && pf.indexOf(m) < 0);
+  return Object.assign(pf.length ? { fine: [pf, sf] } : {}, {
     name: str(r[0]), primary: primary,
     secondary: list(r[2]).filter(m => MUSCLES.indexOf(m) >= 0 && primary.indexOf(m) < 0),
     equipment: EQUIP.indexOf(equipment) >= 0 ? equipment : 'none listed', // a blank cell means "none listed", as in the original sheet
     mechanic: MECHANICS.indexOf(mechanic) >= 0 ? mechanic : '',
     mine: key(r[5]) === me,
-  };
+  });
 }
 const byDate = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); // sort is stable, so set order within a day is kept
 
@@ -365,7 +377,8 @@ function sync(req) {
       const x = cleanExercise(op.ex), owner = ownerOf(x.name);
       if (owner !== null && owner !== me) throw fail('"' + x.name + '" was added by someone else, so it cannot be changed from this profile.');
       removeRows('Exercises', r => key(r[0]) === x.name.toLowerCase());
-      appendRows('Exercises', [[x.name, x.primary.join(', '), x.secondary.join(', '), x.equipment === 'none listed' ? '' : x.equipment, x.mechanic, profile.name]]);
+      appendRows('Exercises', [[x.name, x.primary.join(', '), x.secondary.join(', '), x.equipment === 'none listed' ? '' : x.equipment, x.mechanic, profile.name,
+        x.fine ? x.fine[0].join(', ') : '', x.fine ? x.fine[1].join(', ') : '']]);
     },
     delExercise: op => {
       const name = label(op.name, 'Exercise name', MAX.name, true), owner = ownerOf(name);
