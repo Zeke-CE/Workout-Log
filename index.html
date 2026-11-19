@@ -4,13 +4,13 @@
 <style>
   /* Layout: one phone-width column, three screens switched by a bottom tab bar. Blue = primary muscle, orange = secondary, everywhere. */
   :root { --bg: #f1f3f7; --card: #ffffff; --field: #ffffff; --ink: #131a26; --mute: #566176; --line: #d3d9e3;
-    --pri: #2a78d6; --sec: #eb6834; --accent: #1d5fb4; --on-accent: #ffffff; --err: #b3261e; --ok: #17703f;
+    --pri: #2a78d6; --sec: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --accent: #1d5fb4; --on-accent: #ffffff; --err: #b3261e; --ok: #17703f;
     --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif; --body: "Barlow", system-ui, -apple-system, sans-serif; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #10141b; --card: #1a202b; --field: #222a37;
-    --ink: #eef1f6; --mute: #a3adbf; --line: #353e4e; --pri: #3987e5; --sec: #d95926; --accent: #3987e5; --on-accent: #0b1220;
+    --ink: #eef1f6; --mute: #a3adbf; --line: #353e4e; --pri: #3987e5; --sec: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --accent: #3987e5; --on-accent: #0b1220;
     --err: #ff8a80; --ok: #5fd39a; color-scheme: dark; } }
   :root[data-theme="dark"] { --bg: #10141b; --card: #1a202b; --field: #222a37;
-    --ink: #eef1f6; --mute: #a3adbf; --line: #353e4e; --pri: #3987e5; --sec: #d95926; --accent: #3987e5; --on-accent: #0b1220;
+    --ink: #eef1f6; --mute: #a3adbf; --line: #353e4e; --pri: #3987e5; --sec: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --accent: #3987e5; --on-accent: #0b1220;
     --err: #ff8a80; --ok: #5fd39a; color-scheme: dark; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -59,6 +59,10 @@
   .read { font-size: 14px; color: var(--mute); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
   .read span { display: inline-flex; align-items: center; }
   svg.chart { display: block; width: 100%; height: auto; touch-action: pan-y; }
+  .plot h3 { text-transform: none; overflow-wrap: anywhere; }
+  .plot .acts { align-items: center; }
+  .plot .mini { font-size: 15px; width: auto; padding: 0 10px; }
+  .lab { font-weight: 600; font-size: 14px; }
   .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
   /* Train */
   .sets { display: grid; grid-template-columns: 24px 1fr 1fr 44px; gap: 6px 8px; align-items: center; }
@@ -80,7 +84,7 @@
   .ctl { display: flex; justify-content: space-between; gap: 6px; }
   .ctl > div, .acts { display: flex; gap: 6px; flex: none; }
   /* Volume bars (Build preview) */
-  .bar { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; align-items: center; font-size: 14px; text-transform: capitalize; }
+  .bar { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; align-items: center; font-size: 14px; text-transform: capitalize; overflow-wrap: anywhere; }
   .track { position: relative; height: 14px; border-radius: 4px; background: var(--bg); display: flex; gap: 2px; }
   .track i { display: block; height: 100%; background: var(--pri); border-radius: 3px; }
   .track i.s { background: var(--sec); }
@@ -141,10 +145,8 @@
 
   <section id="vTrends">
     <div id="range" class="seg" role="group" aria-label="Time range"></div>
-    <div id="metric" class="seg" role="group" aria-label="What to show"></div>
-    <div id="key" class="card key"></div>
     <div id="map" class="card" hidden>
-      <h3>Sets per muscle</h3>
+      <div class="between"><h3>Sets per muscle</h3><button id="mapX" class="mini" type="button" aria-label="Remove the body map from the dashboard">✕</button></div>
       <div id="mapSide" class="seg" role="group" aria-label="Body side"></div>
       <div class="between"><button id="mapPrev" class="mini" type="button" aria-label="Earlier week">‹</button><span id="mapWeek"></span><button id="mapNext" class="mini" type="button" aria-label="Later week">›</button></div>
       <div id="mapBody" class="bm"></div>
@@ -154,6 +156,7 @@
       <p class="hint"><a href="https://repdb.co" target="_blank" rel="nofollow noopener">Exercise data by RepDB (repdb.co)</a></p>
     </div>
     <div id="charts" class="stack"></div>
+    <button id="addPlot" type="button">Add a plot</button>
     <details>
       <summary>Where the numbers come from</summary>
       <ul>
@@ -165,7 +168,8 @@
         <li>Target = your best weight for one more rep, the rep-first progression in the
           <a href="https://pubmed.ncbi.nlm.nih.gov/19204579/" target="_blank" rel="noopener">ACSM 2009 position stand</a>, which adds 2–10% load once you beat the rep goal by 1–2 reps.</li>
         <li>Strength uses estimated one-rep max = weight × (1 + reps ÷ 30) (Epley), from sets of 10 reps or fewer because estimates get worse above that
-          (<a href="https://www.unm.edu/~rrobergs/478PredictionAccuracy.pdf" target="_blank" rel="noopener">Mayhew et al. 2008</a>). Each lift is compared with its own first week in the range (= 100), then lifts are averaged per primary muscle. Assisted and zero-weight lifts are left out.</li>
+          (<a href="https://www.unm.edu/~rrobergs/478PredictionAccuracy.pdf" target="_blank" rel="noopener">Mayhew et al. 2008</a>). For a muscle group, each lift is compared with its own first week in the range (= 100), then lifts are averaged per primary muscle. For a single lift, the plot shows its best estimate each week. Assisted and zero-weight lifts are left out.</li>
+        <li>Plots: Compare shows the average per week over the range (for Strength, the change from the first week with a value to the latest). Plotting one measure against another puts one dot per week, and r (−1 to 1) is how closely the two move together; it does not show cause. Your dashboard is saved in this browser, not in the database.</li>
         <li>Adding or dropping sets on the day is volume autoregulation, reviewed in
           <a href="https://peerj.com/articles/10663" target="_blank" rel="noopener">Larsen et al. 2021</a>.</li>
         <li>Intensity techniques are sub-sets logged under a set. Drop sets grew muscle about as much as straight sets in a half to a third of the time
@@ -566,14 +570,18 @@ function trendData(weeks) {
   const start = monday(dayNum(today())) - 7 * (weeks - 1);
   const zeros = () => Array(weeks).fill(0), blanks = () => Array(weeks).fill(null);
   const M = {}, get = m => M[m] || (M[m] = { setsP: zeros(), setsS: zeros(), setsT: zeros(), loadP: zeros(), loadS: zeros(), lifts: {}, strength: blanks() });
-  const unknown = new Set();
+  const unknown = new Set(), X = {}; // X = per lift, by lowercase name: straight sets, load (sub-sets included), best estimated 1RM
   S.lifts.forEach(([date, , exercise, , reps, weight, , , tech, , rom]) => {
     const i = (monday(dayNum(date)) - start) / 7, sets = tech ? 'setsT' : 'setsP', load = weight * reps * (rom || 1);
     if (i < 0 || i >= weeks) return;
-    const e = BY.get(exercise.trim().toLowerCase());
-    if (!e) return unknown.add(exercise);
     // Estimated 1RM (Epley); only straight sets of 10 reps or fewer, and not assisted or zero-weight lifts.
     const oneRm = !tech && reps <= 10 && weight > 0 && !/assisted/i.test(exercise) ? (reps === 1 ? weight : weight * (1 + reps / 30)) : 0;
+    const k = exercise.trim().toLowerCase(), x = X[k] || (X[k] = { name: exercise.trim(), sets: zeros(), load: zeros(), strength: blanks() });
+    if (!tech) x.sets[i] += 1;
+    x.load[i] += load;
+    if (oneRm) x.strength[i] = Math.max(x.strength[i] || 0, oneRm);
+    const e = BY.get(k);
+    if (!e) return unknown.add(exercise);
     e.primary.forEach(m => {
       const g = get(m);
       g[sets][i] += 1;
@@ -595,7 +603,7 @@ function trendData(weeks) {
     const i = (monday(dayNum(date)) - start) / 7;
     if (i >= 0 && i < weeks) { sum[i] = (sum[i] || 0) + wt; n[i] = (n[i] || 0) + 1; }
   });
-  return { start, M, unknown: [...unknown].sort(), body: blanks().map((_, i) => (n[i] ? sum[i] / n[i] : null)) };
+  return { start, M, X, unknown: [...unknown].sort(), body: blanks().map((_, i) => (n[i] ? sum[i] / n[i] : null)) };
 }
 
 // ---------- Sheet: confirmations, swap picker, copy fallback ----------
@@ -956,8 +964,55 @@ function unknownBox(names) {
 // ---------- Trends ----------
 
 const RANGES = [['4 wk', 4], ['12 wk', 12], ['6 mo', 26], ['1 yr', 52]];
-const METRICS = [['Sets', 'sets'], ['Load', 'load'], ['Strength', 'strength']];
-const view = { weeks: 12, metric: 'sets', side: 'FRONT', back: 0 }; // back = muscle-map week, counted back from this week
+const view = { weeks: 12, side: 'FRONT', back: 0 }; // back = muscle-map week, counted back from this week
+
+// The Trends tab is a dashboard: the body map ('map') plus plots the user builds. A plot is
+// { y: measure, of: 'group' | 'exercise', items: up to PICK_MAX names ([] = your top ones), x: what it is plotted against, vs }.
+// x: 'time' = weekly; 'compare' = one bar per item; 'bw' or 'vs' = one dot per week against body weight or vs = { y, of, name }.
+// The list is a view setting, so it stays in this browser (per profile) and is not sent to the database.
+const YS = { sets: 'Sets', load: 'Load', strength: 'Strength', bw: 'Body weight' };
+const PICK_MAX = 5, COLORS = ['var(--pri)', 'var(--sec)', 'var(--c3)', 'var(--c4)', 'var(--c5)']; // fixed order, checked for color-blind separation
+const DASH0 = ['map', { y: 'sets', x: 'time' }, { y: 'strength', x: 'compare' }, { y: 'bw', x: 'time' }];
+const NOTES = { // [muscle group, single lift]
+  sets: ['Fractional sets: 1 for each set where the muscle is primary, ½ where it assists. Technique sub-sets are not in the total.', 'Straight sets of the lift.'],
+  load: ['Weight × reps, counted at half where the muscle assists.', 'Weight × reps, technique sub-sets included.'],
+  strength: ['Estimated one-rep max as an index: 100 = each lift’s first week in this range, averaged over the lifts where the muscle is primary.', 'Best estimated one-rep max of the week, from sets of 10 reps or fewer.'],
+  bw: ['Weekly average.', 'Weekly average.'],
+};
+const MAP = $('map');
+let dashMem = null; // { key, d }: the dashboard, also kept here so it still works when storage is blocked
+const dashKey = () => 'workoutlog.dash' + (REMOTE && session ? '.' + session.profile.toLowerCase() : '');
+
+/** A stored or edited plot, checked and filled in; null if it is not one. */
+function cleanSpec(s) {
+  if (s === 'map') return s;
+  if (!s || !YS[s.y]) return null;
+  const of = s.of === 'exercise' ? 'exercise' : 'group', ok = (o, n) => typeof n === 'string' && n !== '' && (o === 'exercise' || MUSCLES.includes(n));
+  const items = s.y === 'bw' ? [] : [...new Set(Array.isArray(s.items) ? s.items : [])].filter(n => ok(of, n)).slice(0, PICK_MAX);
+  let x = ['time', 'compare', 'bw', 'vs'].includes(s.x) ? s.x : 'time', vs = null;
+  if (s.y === 'bw' && (x === 'compare' || x === 'bw')) x = 'time';
+  if (x === 'vs') {
+    const v = s.vs || {}, vof = v.of === 'exercise' ? 'exercise' : 'group';
+    if (['sets', 'load', 'strength'].includes(v.y) && ok(vof, v.name)) vs = { y: v.y, of: vof, name: v.name }; else x = 'time';
+  }
+  return { y: s.y, of, items, x, vs };
+}
+function getDash() {
+  const key = dashKey();
+  if (dashMem && dashMem.key === key) return dashMem.d.slice();
+  let d = DASH0;
+  try { const saved = JSON.parse(localStorage.getItem(key)); if (Array.isArray(saved)) d = saved; } catch (err) { /* blocked or unreadable: the default */ }
+  dashMem = { key, d: d.map(cleanSpec).filter(Boolean) };
+  return dashMem.d.slice();
+}
+/** Save the dashboard and redraw; `focus` = the index of a card to scroll to. */
+function setDash(d, focus) {
+  dashMem = { key: dashKey(), d: d.map(cleanSpec).filter(Boolean) };
+  try { localStorage.setItem(dashMem.key, JSON.stringify(dashMem.d)); } catch (err) { say('warn', `The dashboard works but is not saved in this browser: ${msgOf(err)}`, 'err'); }
+  drawTrends();
+  const el = focus == null ? null : $('charts').children[focus];
+  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
 
 function segment(id, options, prop) {
   $(id).replaceChildren(...options.map(([label, value]) => h('button', {
@@ -966,7 +1021,7 @@ function segment(id, options, prop) {
   }, label)));
 }
 
-const CW = 328, CH = 72; // chart viewBox; about 1:1 with CSS pixels on a phone
+const CW = 328, CH = 96; // chart viewBox; about 1:1 with CSS pixels on a phone
 function frame(n, onPick) {
   const svg = sv('svg', { viewBox: `0 0 ${CW} ${CH}`, class: 'chart', role: 'img' });
   const band = sv('rect', { y: 0, width: CW / n, height: CH, fill: 'var(--ink)', opacity: 0.07 });
@@ -1007,76 +1062,215 @@ function barChart(pri, sec, ext, max, ref, onPick) {
   return f.svg;
 }
 
-/** One line through the weeks that have a value; lo/hi set the shared scale. */
-function lineChart(vals, lo, hi, base, onPick) {
-  const n = vals.length, x = i => (i + 0.5) * CW / n, y = v => CH - 6 - (v - lo) / ((hi - lo) || 1) * (CH - 20);
+/** One line per series ({ vals, color }) through the weeks that have a value; lo/hi set the shared scale. */
+function lineChart(list, lo, hi, base, onPick) {
+  const n = list[0].vals.length, x = i => (i + 0.5) * CW / n, y = v => CH - 6 - (v - lo) / ((hi - lo) || 1) * (CH - 20);
   const f = frame(n, onPick);
   if (base != null) f.guide(y(base), String(base));
-  const pts = vals.map((v, i) => (v == null ? null : [x(i), y(v)])).filter(Boolean);
-  if (pts.length > 1) f.svg.append(sv('path', { d: 'M' + pts.map(p => p.join(',')).join('L'), fill: 'none', stroke: 'var(--pri)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-  const end = pts[pts.length - 1];
-  if (end) f.svg.append(sv('circle', { cx: end[0], cy: end[1], r: 4, fill: 'var(--pri)', stroke: 'var(--card)', 'stroke-width': 2 }));
-  f.hits(Math.max(0, vals.reduce((last, v, i) => (v == null ? last : i), -1))); // open on the latest week with a value
+  let last = 0;
+  list.forEach(({ vals, color }) => {
+    const pts = vals.map((v, i) => (v == null ? null : [x(i), y(v)])).filter(Boolean);
+    if (pts.length > 1) f.svg.append(sv('path', { d: 'M' + pts.map(p => p.join(',')).join('L'), fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    pts.forEach(([cx, cy], k) => { const end = k === pts.length - 1; f.svg.append(sv('circle', { cx, cy, r: end ? 4 : 2.5, fill: color, stroke: 'var(--card)', 'stroke-width': end ? 2 : 1 })); });
+    vals.forEach((v, i) => { if (v != null) last = Math.max(last, i); });
+  });
+  f.hits(last); // open on the latest week with a value
   return f.svg;
 }
 
-function trendCard(title, t, makeChart, readout) {
-  const num = h('span', { class: 'num' }), read = h('p', { class: 'read' });
-  const svg = makeChart(i => {
-    const r = readout(i);
-    num.textContent = r.num;
-    read.replaceChildren(h('span', {}, `Week of ${shortDate(t.start + 7 * i)}`), ...r.parts.filter(Boolean));
-  });
-  svg.setAttribute('aria-label', `${title}, weekly`);
-  const last = t.start + 7 * (t.body.length - 1);
-  return h('article', { class: 'card' }, h('div', { class: 'between' }, h('h3', {}, title), num), read, svg,
-    h('div', { class: 'axis' }, h('span', {}, shortDate(t.start)), h('span', {}, `${shortDate(last)} – ${shortDate(last + 6)}`)));
+/** One dot per week, per series ({ pts: [[x, y, week]], color }). Tap a dot for its week. */
+function scatter(list, onPick) {
+  const all = list.flatMap(l => l.pts), span = k => { const v = all.map(p => p[k]), lo = Math.min(...v), hi = Math.max(...v); return lo === hi ? [lo - 1, hi + 1] : [lo, hi]; };
+  const [x0, x1] = span(0), [y0, y1] = span(1), X = v => 36 + (v - x0) / (x1 - x0) * (CW - 44), Y = v => CH - 8 - (v - y0) / (y1 - y0) * (CH - 22);
+  const svg = sv('svg', { viewBox: `0 0 ${CW} ${CH}`, class: 'chart', role: 'img' }), hits = [];
+  const label = (y, v) => Object.assign(sv('text', { x: 2, y, 'font-size': 10, fill: 'var(--mute)' }), { textContent: v });
+  svg.append(sv('line', { x1: 0, x2: CW, y1: CH - 0.5, y2: CH - 0.5, stroke: 'var(--line)' }), label(10, `↑ ${list.yHi}`), label(CH - 4, list.yLo));
+  let on = null;
+  list.forEach(l => l.pts.forEach(p => {
+    const dot = sv('circle', { cx: X(p[0]), cy: Y(p[1]), r: 4, fill: l.color, stroke: 'var(--card)', 'stroke-width': 1.5 });
+    const hit = sv('circle', { cx: X(p[0]), cy: Y(p[1]), r: 12, fill: 'transparent' });
+    const pick = () => { if (on) on.setAttribute('r', 4); dot.setAttribute('r', 6); on = dot; onPick(l, p); };
+    hit.addEventListener('pointerenter', pick);
+    hit.addEventListener('click', pick);
+    svg.append(dot);
+    hits.push(hit);
+  }));
+  svg.append(...hits);
+  return { svg, x0, x1, y0, y1 };
+}
+
+/** Pearson correlation of [x, y] points; null when either does not vary. */
+function corr(pts) {
+  const n = pts.length, mx = pts.reduce((a, p) => a + p[0], 0) / n, my = pts.reduce((a, p) => a + p[1], 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  pts.forEach(([x, y]) => { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; syy += (y - my) ** 2; });
+  return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+}
+
+/** Weekly values of one measure for a muscle group or a lift (null = no value that week). */
+function series(t, y, of, name) {
+  const none = () => t.body.map(() => (y === 'strength' ? null : 0));
+  if (y === 'bw') return t.body;
+  if (of === 'exercise') { const x = t.X[name.toLowerCase()]; return x ? x[y] : none(); }
+  const g = t.M[name];
+  if (!g) return none();
+  return y === 'strength' ? g.strength : g[y + 'P'].map((v, i) => v + g[y + 'S'][i]);
+}
+const nameOf = (t, of, n) => (of === 'exercise' && t.X[n.toLowerCase()] ? t.X[n.toLowerCase()].name : n);
+const dotOf = color => h('i', { class: 'dot', style: `background:${color}` });
+
+/** The plot's items: the picked ones, or the busiest in the range (top 3, or up to 12 side by side). */
+function itemsOf(s, t) {
+  if (s.y === 'bw' || s.items.length) return s.items;
+  const pool = s.of === 'exercise' ? Object.values(t.X).map(x => x.name) : Object.keys(t.M);
+  const score = n => series(t, s.y, s.of, n).reduce((a, v) => a + (v == null ? 0 : s.y === 'strength' ? 1 : v), 0);
+  return pool.map(n => [n, score(n)]).filter(r => r[1] > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, s.x === 'compare' ? 12 : 3).map(r => r[0]);
+}
+function plotTitle(s) {
+  const all = s.of === 'exercise' ? 'lifts' : 'muscles';
+  const what = s.y === 'bw' ? 'Body weight' : `${YS[s.y]} · ${s.items.length ? s.items.join(', ') : s.x === 'compare' ? `top ${all}` : `top 3 ${all}`}`;
+  return what + (s.x === 'bw' ? ' vs body weight' : s.x === 'vs' ? ` vs ${YS[s.vs.y].toLowerCase()} · ${s.vs.name}` : '');
+}
+
+/** One dashboard card. onEdit = open the builder for it (left out in the builder's own preview). */
+function plotCard(s, t, onEdit) {
+  const names = itemsOf(s, t), show = s.y === 'load' ? big : fmt, title = plotTitle(s), group = s.of === 'group' && s.y !== 'bw';
+  const lists = s.y === 'bw' ? [{ name: 'Body weight', vals: t.body, color: COLORS[0] }]
+    : names.map((n, k) => ({ name: nameOf(t, s.of, n), vals: series(t, s.y, s.of, n), color: COLORS[k % COLORS.length] }));
+  const num = h('span', { class: 'num' }), read = h('p', { class: 'read' }), notes = [NOTES[s.y][group ? 0 : 1]];
+  const tell = (n, parts) => { num.textContent = n; read.replaceChildren(...parts.filter(Boolean)); };
+  const week = i => h('span', {}, `Week of ${shortDate(t.start + 7 * i)}`), one = lists.length === 1;
+  const val = (v, f = show) => (v == null ? '–' : f(v));
+  let body, axis = null;
+  if (!lists.some(l => l.vals.some(v => v))) {
+    body = h('p', { class: 'hint' }, s.y === 'bw' ? 'No body weight logged in this range.' : s.y === 'strength' ? 'No sets of 10 reps or fewer in this range.'
+      : 'Nothing logged in this range yet. Log a workout on the Train tab.');
+  } else if (s.x === 'compare') {
+    const avg = a => a.reduce((x, y) => x + y, 0) / a.length, split = group && s.y !== 'strength';
+    const rows = names.map((n, k) => {
+      const g = split && t.M[n], v = lists[k].vals.filter(x => x != null);
+      if (s.y === 'strength') return { name: lists[k].name, p: v.length ? (v[v.length - 1] / v[0] - 1) * 100 : 0, s: 0, none: !v.length };
+      return { name: lists[k].name, p: g ? avg(g[s.y + 'P']) : avg(lists[k].vals), s: g ? avg(g[s.y + 'S']) : 0 };
+    }).sort((a, b) => b.p + b.s - a.p - a.s || a.name.localeCompare(b.name));
+    const ref = split && s.y === 'sets' ? WEEK_REF : 0, max = Math.max(ref, ...rows.map(r => Math.abs(r.p) + r.s)) || 1;
+    body = h('div', { class: 'stack', style: 'gap:6px' }, rows.map(r => h('div', { class: 'bar' }, h('span', {}, r.name),
+      h('span', { class: 'track', 'aria-hidden': 'true' }, r.p !== 0 && h('i', { class: r.p < 0 ? 't' : '', style: `width:${Math.abs(r.p) / max * 100}%` }),
+        r.s > 0 && h('i', { class: 's', style: `width:${r.s / max * 100}%` }), ref > 0 && h('b', { style: `left:${ref / max * 100}%` })),
+      h('span', { class: 'val' }, r.none ? '–' : s.y === 'strength' ? `${r.p >= 0 ? '+' : ''}${fmt(r.p)}%` : show(r.p + r.s)))));
+    tell('', [h('span', {}, s.y === 'strength' ? 'Change from the first week with a value to the latest.' : 'Average per week over the range.'),
+      split && h('span', {}, dotOf('var(--pri)'), 'primary'), split && h('span', {}, dotOf('var(--sec)'), 'secondary'),
+      s.y === 'strength' && rows.some(r => r.p < 0) && h('span', {}, h('i', { class: 'dot t' }), 'down')]);
+    if (ref) notes.push(`Line at ${WEEK_REF} sets a week is guidance, not a limit.`);
+  } else if (s.x === 'time') {
+    const g = one && group && s.y !== 'strength' && t.M[names[0]];
+    if (one && (s.y === 'sets' || s.y === 'load')) { // one muscle or lift: weekly columns, split into primary and secondary for a muscle
+      const P = g ? g[s.y + 'P'] : lists[0].vals, Sx = g ? g[s.y + 'S'] : P.map(() => 0), T = g && s.y === 'sets' ? g.setsT : null;
+      const ref = g && s.y === 'sets' ? WEEK_REF : 0, max = Math.max(ref || 1, ...P.map((v, i) => v + Sx[i] + (T ? T[i] : 0)));
+      body = barChart(P, Sx, T, max, ref, i => tell(show(P[i] + Sx[i]), [week(i), g && h('span', {}, dotOf('var(--pri)'), `${show(P[i])} primary`),
+        g && h('span', {}, dotOf('var(--sec)'), `${show(Sx[i])} secondary`), T && T[i] > 0 && h('span', {}, h('i', { class: 'dot t' }), `${fmt(T[i])} technique`)]));
+      if (ref) notes.push(`Line at ${WEEK_REF} sets a week is guidance, not a limit.`);
+    } else {
+      const all = lists.flatMap(l => l.vals.filter(v => v != null)), base = s.y === 'strength' && group ? 100 : null;
+      const lo = Math.min(...all, ...(s.y === 'sets' || s.y === 'load' ? [0] : []), ...(base ? [base] : [])), hi = Math.max(...all, ...(base ? [base] : []));
+      body = lineChart(lists, lo, hi, base, i => tell(one ? val(lists[0].vals[i]) : '',
+        [week(i), ...lists.map(l => (one ? l.vals[i] == null && h('span', {}, 'not logged') : h('span', {}, dotOf(l.color), `${l.name} ${val(l.vals[i])}`)))]));
+    }
+    const last = t.start + 7 * (t.body.length - 1);
+    axis = h('div', { class: 'axis' }, h('span', {}, shortDate(t.start)), h('span', {}, `${shortDate(last)} – ${shortDate(last + 6)}`));
+  } else { // against another measure: one dot per week that has both
+    const xs = s.x === 'bw' ? t.body : series(t, s.vs.y, s.vs.of, s.vs.name), showX = s.x === 'vs' && s.vs.y === 'load' ? big : fmt;
+    const xName = s.x === 'bw' ? 'body weight' : `${YS[s.vs.y].toLowerCase()} · ${nameOf(t, s.vs.of, s.vs.name)}`;
+    const pl = lists.map(l => ({ ...l, pts: l.vals.map((v, i) => [xs[i], v, i]).filter(p => p[0] != null && p[1] != null) }));
+    if (!pl.some(l => l.pts.length)) body = h('p', { class: 'hint' }, `No week in this range has both a value and ${xName}.`);
+    else {
+      const ys = pl.flatMap(l => l.pts.map(p => p[1]));
+      Object.assign(pl, { yLo: show(Math.min(...ys)), yHi: show(Math.max(...ys)) });
+      const sc = scatter(pl, (l, [x, y, i]) => tell(show(y), [week(i), h('span', {}, dotOf(l.color), `${l.name} ${show(y)}`), h('span', {}, `${xName} ${showX(x)}`)]));
+      body = sc.svg;
+      axis = h('div', { class: 'axis' }, h('span', {}, showX(sc.x0)), h('span', {}, `${xName} →`), h('span', {}, showX(sc.x1)));
+      const r = l => { if (l.pts.length < 3) return 'too few weeks to say'; const c = corr(l.pts); return c == null ? 'one of the two never changed' : `r = ${c.toFixed(2)}`; };
+      tell('', pl.map(l => h('span', {}, dotOf(l.color), `${l.name}: ${r(l)}`)));
+      notes.push('One dot per week; tap one for its values. r runs from −1 to 1 and shows how closely the two move together, not cause.');
+    }
+  }
+  if (body instanceof SVGElement) body.setAttribute('aria-label', title);
+  return h('article', { class: 'card plot' },
+    h('div', { class: 'between' }, h('h3', {}, title), h('div', { class: 'acts' }, num, onEdit && h('button', { type: 'button', class: 'mini', 'aria-label': `Edit plot: ${title}`, onclick: onEdit }, 'Edit'))),
+    read, body, axis, h('p', { class: 'hint' }, notes.join(' ')));
+}
+
+/** Every lift in the history, most-logged first. */
+function liftNames() {
+  const c = new Map();
+  S.lifts.forEach(r => { const k = r[2].trim().toLowerCase(), o = c.get(k) || { name: r[2].trim(), n: 0 }; o.n++; c.set(k, o); });
+  return [...c.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)).map(o => o.name);
+}
+
+/** The plot builder, in the bottom sheet with a live preview. at = the dashboard index being edited, or -1 for a new plot. */
+function plotBuilder(at) {
+  const t = trendData(view.weeks), lifts = liftNames(), box = h('div', { class: 'stack' });
+  const s = at >= 0 ? JSON.parse(JSON.stringify(getDash()[at])) : { y: 'sets', of: 'group', items: [], x: 'time', vs: null };
+  let q = '';
+  const seg = (label, opts, cur, set) => h('div', { class: 'stack', style: 'gap:4px' }, h('span', { class: 'lab' }, label),
+    h('div', { class: 'seg', role: 'group', 'aria-label': label }, opts.map(([l, v]) => h('button', { type: 'button', 'aria-pressed': String(cur === v), onclick: () => { set(v); draw(); } }, l))));
+  const chips = () => {
+    const pool = s.of === 'exercise' ? lifts : MUSCLES, low = q.trim().toLowerCase();
+    const rest = pool.filter(n => !s.items.includes(n) && n.toLowerCase().includes(low));
+    if (!pool.length) return h('p', { class: 'hint' }, 'No lifts logged yet.');
+    return h('div', { class: 'mus' }, [...s.items, ...rest.slice(0, 30)].map(n => {
+      const k = s.items.indexOf(n);
+      return h('button', { type: 'button', 'aria-pressed': String(k >= 0), disabled: k < 0 && s.items.length >= PICK_MAX,
+        onclick: () => { if (k >= 0) s.items.splice(k, 1); else s.items.push(n); draw(); } }, k >= 0 && s.x !== 'compare' && dotOf(COLORS[k]), n);
+    }));
+  };
+  const save = d => { closeSheet(); setDash(d, at >= 0 ? at : d.length - 1); };
+  const draw = () => {
+    if (s.y === 'bw' && (s.x === 'compare' || s.x === 'bw')) s.x = 'time';
+    const list = h('div', {}, chips()), pool = s.of === 'exercise' ? lifts : MUSCLES;
+    const vsList = s.vs && (s.vs.of === 'exercise' ? lifts : MUSCLES), vsPick = s.vs && h('select', { onchange: ev => { s.vs.name = ev.target.value; draw(); } }, (vsList || []).map(n => h('option', { value: n }, n)));
+    if (vsPick) vsPick.value = s.vs.name;
+    box.replaceChildren(...h('div', {},
+      seg('Show', [['Sets', 'sets'], ['Load', 'load'], ['Strength', 'strength'], ['Body wt', 'bw']], s.y, v => { s.y = v; }),
+      s.y !== 'bw' && [
+        seg('For', [['Muscle groups', 'group'], ['Lifts', 'exercise']], s.of, v => { if (v !== s.of) { s.items = []; q = ''; } s.of = v; }),
+        h('span', { class: 'lab' }, `Pick up to ${PICK_MAX} (${s.items.length} picked). None = your ${s.x === 'compare' ? 'busiest' : 'top 3'} in the range.`),
+        pool.length > 12 && h('input', { type: 'search', placeholder: s.of === 'exercise' ? 'Find a lift' : 'Find a muscle group', value: q, 'aria-label': 'Filter the list',
+          oninput: ev => { q = ev.target.value; list.replaceChildren(chips()); } }),
+        list],
+      seg('Against', s.y === 'bw' ? [['Time', 'time'], ['Other', 'vs']] : [['Time', 'time'], ['Compare', 'compare'], ['Body wt', 'bw'], ['Other', 'vs']], s.x,
+        v => { s.x = v; if (v === 'vs' && !s.vs) s.vs = { y: 'sets', of: 'group', name: MUSCLES.find(m => !s.items.includes(m)) }; }),
+      s.x === 'vs' && [
+        seg('Other measure', [['Sets', 'sets'], ['Load', 'load'], ['Strength', 'strength']], s.vs.y, v => { s.vs.y = v; }),
+        seg('Of', lifts.length ? [['Muscle group', 'group'], ['Lift', 'exercise']] : [['Muscle group', 'group']], s.vs.of,
+          v => { if (v !== s.vs.of) s.vs.name = (v === 'exercise' ? lifts : MUSCLES)[0]; s.vs.of = v; }),
+        h('label', {}, s.vs.of === 'exercise' ? 'Lift' : 'Muscle group', vsPick)],
+      h('span', { class: 'lab' }, 'Preview'),
+      plotCard(cleanSpec(s), t),
+      h('button', { type: 'button', class: 'btn', onclick: () => { const d = getDash(); if (at >= 0) d[at] = cleanSpec(s); else d.push(cleanSpec(s)); save(d); } },
+        at >= 0 ? 'Save changes' : 'Add to dashboard'),
+      at > 0 && h('button', { type: 'button', onclick: () => { const d = getDash(); d.unshift(...d.splice(at, 1)); closeSheet(); setDash(d, 0); } }, 'Move to the top'),
+      at >= 0 && h('button', { type: 'button', class: 'danger', onclick: () => { const d = getDash(); d.splice(at, 1); closeSheet(); setDash(d); } }, 'Remove from the dashboard'),
+      at < 0 && !getDash().includes('map') && h('button', { type: 'button', onclick: () => { closeSheet(); setDash(['map', ...getDash()], 0); } }, 'Put the body map back')).childNodes);
+  };
+  draw();
+  openSheet(at >= 0 ? 'Edit plot' : 'Add a plot', [box]);
 }
 
 function drawTrends() {
   segment('range', RANGES, 'weeks');
-  segment('metric', METRICS, 'metric');
-  const t = trendData(view.weeks), names = Object.keys(t.M), cards = [], sets = view.metric === 'sets';
-  $('map').hidden = !sets;
-  if (sets) drawMap();
-  const total = a => a.reduce((x, y) => x + y, 0);
-  const keyLine = (cls, text) => h('p', {}, h('i', { class: cls }), h('span', {}, text));
-  if (view.metric === 'strength') {
-    $('key').replaceChildren(h('p', {}, 'Estimated one-rep max per muscle, as an index: 100 = each lift’s first week in this range. Uses lifts where the muscle is primary.'));
-    const shown = names.filter(m => t.M[m].strength.some(v => v != null)).sort();
-    const all = shown.flatMap(m => t.M[m].strength.filter(v => v != null));
-    const lo = Math.min(100, ...all), hi = Math.max(100, ...all);
-    shown.forEach(m => cards.push(trendCard(m, t, pick => lineChart(t.M[m].strength, lo, hi, 100, pick), i => {
-      const v = t.M[m].strength[i];
-      return { num: v == null ? '–' : fmt(v), parts: [h('span', {}, v == null ? 'not trained' : `${v >= 100 ? '+' : ''}${fmt(v - 100)}% vs first week`)] };
-    })));
-  } else {
-    const P = sets ? 'setsP' : 'loadP', Sx = sets ? 'setsS' : 'loadS', show = sets ? fmt : big;
-    $('key').replaceChildren(
-      keyLine('dot', sets ? 'Primary: the muscle an exercise mainly trains. Each set counts 1.' : 'Primary: weight × reps from exercises that mainly train the muscle.'),
-      keyLine('dot s', sets ? 'Secondary: a muscle that assists. Each set counts ½.' : 'Secondary: weight × reps from exercises where the muscle assists, counted at half.'),
-      ...(sets ? [keyLine('dot t', 'Technique: partial, myo, rest-pause and drop sub-sets. Tallied on their own, not in the set total.'),
-        h('p', { class: 'hint' }, `Line at ${WEEK_REF} sets a week is guidance, not a limit.`)] : []));
-    const max = Math.max(sets ? WEEK_REF : 1, ...names.flatMap(m => t.M[m][P].map((v, i) => v + t.M[m][Sx][i] + (sets ? t.M[m].setsT[i] : 0))));
-    names.sort((a, b) => total(t.M[b][P]) + total(t.M[b][Sx]) - total(t.M[a][P]) - total(t.M[a][Sx]) || a.localeCompare(b));
-    names.forEach(m => cards.push(trendCard(m, t, pick => barChart(t.M[m][P], t.M[m][Sx], sets && t.M[m].setsT, max, sets ? WEEK_REF : 0, pick), i => {
-      const p = t.M[m][P][i], s = t.M[m][Sx][i], x = sets && t.M[m].setsT[i];
-      return { num: show(p + s), parts: [h('span', {}, h('i', { class: 'dot' }), `${show(p)} primary`), h('span', {}, h('i', { class: 'dot s' }), `${show(s)} secondary`),
-        x > 0 && h('span', {}, h('i', { class: 'dot t' }), `${fmt(x)} technique`)] };
-    })));
-  }
-  if (!cards.length) cards.push(h('p', { class: 'card hint' }, view.metric === 'strength'
-    ? 'No sets of 10 reps or fewer in this range yet.' : 'No sets logged in this range yet. Log a workout on the Train tab.'));
-  const bw = t.body.filter(v => v != null);
-  if (bw.length) cards.push(trendCard('Body weight', t, pick => lineChart(t.body, Math.min(...bw), Math.max(...bw), null, pick), i => ({
-    num: t.body[i] == null ? '–' : fmt(t.body[i]), parts: [h('span', {}, t.body[i] == null ? 'not logged' : 'weekly average')],
-  })));
+  const t = trendData(view.weeks), dash = getDash();
+  const cards = dash.map((s, i) => (s === 'map' ? MAP : plotCard(s, t, () => plotBuilder(i))));
+  MAP.hidden = !dash.includes('map');
+  if (MAP.hidden) cards.push(MAP); // kept in the page, hidden, so its controls stay wired up
+  if (!dash.length) cards.unshift(h('p', { class: 'card hint' }, 'Your dashboard is empty. Add a plot to see your training over time.'));
   if (t.unknown.length) cards.push(unknownBox(t.unknown));
   $('charts').replaceChildren(...cards);
+  if (!MAP.hidden) drawMap();
   $('demo').hidden = !S.demo;
 }
 
-// ---------- Muscle map (Trends → Sets) ----------
+// ---------- Muscle map (a Trends dashboard card) ----------
 // Finer muscle lists from RepDB, drawn with body-muscles. Neither is stored in this repository: each browser downloads RepDB's
 // file from RepDB's own repository at a fixed commit (license term 1 allows in-app use; term 3 forbids redistributing it as a
 // dataset) and keeps only names, equipment and muscle lists in localStorage, so the 2.6 MB file downloads once per device.
@@ -1237,7 +1431,7 @@ function loadMap() {
     if (bad.length) throw new Error(`Muscle map regions that do not exist: ${bad.join(', ')}.`);
     RD.mapOk = true;
   }).catch(err => { RD.mapErr = msgOf(err); console.error('Muscle map:', err); })
-    .finally(() => { RD.mapBusy = false; if (!$('vTrends').hidden && view.metric === 'sets') drawMap(); });
+    .finally(() => { RD.mapBusy = false; if (!$('vTrends').hidden && !MAP.hidden) drawMap(); });
 }
 
 /** Weekly fractional sets per RepDB muscle: 1 per set where it is primary, ½ where secondary (Pelland et al. 2024). Straight sets only. */
@@ -1890,6 +2084,8 @@ $('imp').addEventListener('change', async ev => {
   refresh();
   ev.target.value = '';
 });
+$('mapX').addEventListener('click', () => setDash(getDash().filter(x => x !== 'map')));
+$('addPlot').addEventListener('click', () => plotBuilder(-1));
 $('mapPrev').addEventListener('click', () => { view.back = Math.min(view.weeks - 1, view.back + 1); drawTrends(); });
 $('mapNext').addEventListener('click', () => { view.back = Math.max(0, view.back - 1); drawTrends(); });
 const buildPicker = picker('b',e => { B.items.push({ ex: e.name, sets: 3, tech: [] }); drawPicked(); });

@@ -66,4 +66,5 @@ Lift rows are arrays: `LIFT_COLS = [date, workout, exercise, set, reps, weight, 
 - Deploy the backend before the frontend: paste `Code.gs`, run `setup`, then use Manage deployments → Edit → New version to keep the same `/exec` URL. After that, publish `index.html`. An older backend rejects newer op shapes.
 - `BANK` is the built-in exercise list, stored as compact tuples that index into `MUSCLES`/`EQUIP`. Custom exercises from the Sheet are merged over it by `reindex()`.
 - The frontend views are tabs (`vTrain`, `vBuild`, `vHistory`, `vTrends`), each with a `draw*()` function. `refresh()` redraws them all but skips the Train tab while one of its inputs has focus.
+- Trends is a dashboard of plot specs (`cleanSpec`, `plotCard`, `plotBuilder`) plus the body map (`'map'`). The list is a view setting kept in localStorage under `workoutlog.dash[.profile]`, never sent to the Sheet. Weekly series per muscle group (`t.M`) and per lift (`t.X`) come from `trendData()`.
 - User-facing copy is written in plain, direct sentences. Training guide numbers (`SESSION_REF = 11`, `WEEK_REF = 10`) and their sources appear in the app under Trends → "Where the numbers come from".
