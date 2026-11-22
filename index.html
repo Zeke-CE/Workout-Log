@@ -65,8 +65,11 @@
   .lab { font-weight: 600; font-size: 14px; }
   .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
   /* Train */
-  .sets { display: grid; grid-template-columns: 24px 1fr 1fr 44px; gap: 6px 8px; align-items: center; }
+  /* Weight, reps and note boxes are each wide enough for 4 characters */
+  .sets { display: grid; grid-template-columns: 24px repeat(3, calc(4.5ch + 14px)) 44px; gap: 6px 8px; align-items: center; }
   .sets > span { font-size: 14px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  .sets > input { padding: 8px 6px; }
+  .sets > .was { grid-column: 2 / -1; overflow-wrap: anywhere; }
   .target b { color: var(--accent); }
   /* Intensity-technique sub-sets: one row each, a step further in per level */
   .sub { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
@@ -432,7 +435,7 @@ function clearExamples() {
 }
 
 const newDraft = () => ({ date: today(), workout: '', oneOff: false, body: '', items: [] });
-const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(used));
+const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(s => s.n || used(s)));
 function saveDraft() {
   if (!canStore) return;
   try {
@@ -544,11 +547,11 @@ function addExamples() {
  */
 function stats() {
   const best = {}, last = {};
-  S.lifts.forEach(([date, , exercise, set, reps, weight, , , tech]) => {
+  S.lifts.forEach(([date, , exercise, set, reps, weight, notes, , tech]) => {
     const k = exercise.trim().toLowerCase();
     if (tech) return;
     if (!last[k] || date > last[k].date) last[k] = { date, sets: [] };
-    if (last[k].date === date) last[k].sets[set - 1] = { weight, reps };
+    if (last[k].date === date) last[k].sets[set - 1] = { weight, reps, notes: String(notes || '') };
     const b = best[k];
     const heavier = b && (k.includes('assisted') ? weight < b.weight : weight > b.weight);
     const sameWeightBetter = b && weight === b.weight && (reps > b.reps || (reps === b.reps && date >= b.date));
@@ -1605,7 +1608,7 @@ function drawTrain() {
 function exerciseCard(it, i, hist) {
   const e = BY.get(it.ex.toLowerCase());
   const again = fn => () => { fn(); saveDraft(); drawTrain(); };
-  const grid = h('div', { class: 'sets' }, h('span', {}), h('span', {}, 'Weight'), h('span', {}, 'Reps'), h('span', {}));
+  const grid = h('div', { class: 'sets' }, h('span', {}), h('span', {}, 'Weight'), h('span', {}, 'Reps'), h('span', {}, 'Note'), h('span', {}));
   const fields = (n, name) => {
     const box = (key, hint, mode) => h('input', { type: 'text', inputMode: mode, autocomplete: 'off', value: n[key] || '', placeholder: hint,
       'aria-label': `${name} ${hint}`, oninput: ev => { n[key] = ev.target.value; saveDraft(); } });
@@ -1620,9 +1623,14 @@ function exerciseCard(it, i, hist) {
       placeholder: prev ? String(key === 'w' ? prev.weight : prev.reps) : '', 'aria-label': `${it.ex} set ${j + 1} ${label}`,
       oninput: ev => { s[key] = ev.target.value; saveDraft(); },
     });
-    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'),
+    // Last session's note shows as its first 4 characters; focusing the box shows all of it underneath.
+    const was = prev && prev.notes, full = h('p', { class: 'hint was', hidden: true }, `Last note: ${was}`);
+    const note = h('input', { id: `t${i}n${j}`, type: 'text', autocomplete: 'off', maxLength: 500, value: s.n || '', placeholder: was ? was.slice(0, 4) : '',
+      title: was || '', 'aria-label': `${it.ex} set ${j + 1} note${was ? ` (last time: ${was})` : ''}`,
+      oninput: ev => { s.n = ev.target.value; saveDraft(); }, onfocus: () => { full.hidden = !was; }, onblur: () => { full.hidden = true; } });
+    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'), note,
       h('button', { type: 'button', class: 'mini', 'aria-label': `Add a technique to ${what}`, disabled: kids.length >= 9,
-        onclick: () => addTech(kids, what, again(() => {})) }, '+'),
+        onclick: () => addTech(kids, what, again(() => {})) }, '+'), full,
       ...techRows(kids, 1, what, again(() => {}), fields));
   });
   return h('article', { class: 'card' },
@@ -1634,15 +1642,13 @@ function exerciseCard(it, i, hist) {
     hist
       ? h('p', { class: 'target' }, `Best ${hist.pr.weight} × ${hist.pr.reps} (${hist.pr.date}) · Target `, h('b', {}, `${hist.pr.weight} × ${hist.pr.reps + 1}`))
       : h('p', { class: 'hint' }, 'No history yet. Your first session sets the target.'),
-    hist && h('p', { class: 'hint' }, `Grey numbers = what you did last session (${hist.last.date}).`),
+    hist && h('p', { class: 'hint' }, `Grey = what you did last session (${hist.last.date}). Tap a grey note to read all of it.`),
     grid,
     h('div', { class: 'step' },
       h('button', { type: 'button', 'aria-label': `One set fewer of ${it.ex}`, disabled: it.sets.length <= 1, onclick: again(() => it.sets.pop()) }, '−'),
       h('output', {}, `${it.sets.length} set${it.sets.length > 1 ? 's' : ''}`),
       h('button', { type: 'button', 'aria-label': `One more set of ${it.ex}`, disabled: it.sets.length >= MAX_SETS, onclick: again(() => it.sets.push({ w: '', r: '', kids: [] })) }, '+'),
-      h('span', { class: 'hint' }, 'today only')),
-    h('input', { id: `t${i}n`, type: 'text', autocomplete: 'off', placeholder: 'Notes', value: it.notes, 'aria-label': `${it.ex} notes`,
-      oninput: ev => { it.notes = ev.target.value; saveDraft(); } }));
+      h('span', { class: 'hint' }, 'today only')));
 }
 
 /** Swap for today only: same sets and sub-sets, the new exercise's own history and target. */
@@ -1675,7 +1681,7 @@ function addToSession() {
 }
 
 async function dropItem(it) {
-  if ((it.notes || it.sets.some(used)) && !await ask(`Remove ${it.ex} and what you typed for it?`, 'Remove')) return;
+  if ((it.notes || it.sets.some(s => s.n || used(s))) && !await ask(`Remove ${it.ex} and what you typed for it?`, 'Remove')) return;
   D.items.splice(D.items.indexOf(it), 1);
   saveDraft();
   drawTrain();
@@ -1703,7 +1709,8 @@ async function saveSession() {
     const out = [], errors = [];
     const bad = (w, reps) => typeof w !== 'number' || w < 0 || typeof reps !== 'number' || reps <= 0 || !Number.isInteger(reps);
     D.items.forEach(it => it.sets.forEach((s, j) => {
-      const w = toNum(s.w), reps = toNum(s.r), notes = it.notes.trim();
+      // A set's own note; a draft started before per-set notes may still carry one note for the whole exercise.
+      const w = toNum(s.w), reps = toNum(s.r), notes = (s.n || it.notes || '').trim();
       if (!used(s)) return;
       if (bad(w, reps)) return errors.push(`${it.ex} set ${j + 1}: weight "${w}", reps "${reps}"`);
       out.push([date, workout, it.ex, j + 1, reps, w, notes]);
@@ -1879,7 +1886,10 @@ function drawHistory() {
 
 function dayCard(date, d) {
   const names = [...new Set(d.sets.map(r => r[1]).filter(Boolean))], byEx = new Map();
-  d.sets.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}`
+  // A set's note is shown once; a sub-set row repeats its set's note, and older rows repeat one note on every set.
+  const shown = new Map();
+  const note = r => { const n = String(r[6] || '').trim(), dup = shown.get(r[2]) === n; shown.set(r[2], n); return n && !dup ? ` (${n})` : ''; };
+  d.sets.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}${note(r)}`
     : `${'↳'.repeat(r[7].split('.').length)} ${r[8]} ${r[5]} × ${r[4]}${r[10] ? ` at ${r[10] * 100}% range` : ''}${r[9] === '' ? '' : ` after ${r[9]} s`}`));
   const main = d.sets.filter(r => !r[8]).length, tech = d.sets.length - main;
   const facts = [names.join(', '), main && `${main} set${main > 1 ? 's' : ''}`, tech && `${tech} technique`, d.body.length && `body weight ${d.body.join(', ')}`];
@@ -1887,7 +1897,7 @@ function dayCard(date, d) {
     h('div', { class: 'between' },
       h('div', {}, h('h3', { style: 'text-transform:none' }, longDate(date)), h('p', { class: 'hint' }, facts.filter(Boolean).join(' · '))),
       h('button', { type: 'button', class: 'danger', 'aria-label': `Delete ${date}`, onclick: () => removeDay(date) }, 'Delete')),
-    byEx.size > 0 && h('details', {}, h('summary', {}, 'Sets (weight × reps)'),
+    byEx.size > 0 && h('details', {}, h('summary', {}, 'Sets (weight × reps, notes)'),
       h('ul', {}, [...byEx].map(([ex, sets]) => h('li', {}, `${ex}: ${sets.join(', ')}`)))));
 }
 
