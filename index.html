@@ -145,7 +145,6 @@
   </div>
 
   <section id="vTrends">
-    <div id="range" class="seg" role="group" aria-label="Time range"></div>
     <div id="map" class="card" hidden>
       <div class="between"><h3>Sets per muscle</h3><button id="mapX" class="mini" type="button" aria-label="Remove the body map from the dashboard">✕</button></div>
       <div id="mapSide" class="seg" role="group" aria-label="Body side"></div>
@@ -156,6 +155,8 @@
       <ul id="mapList" class="list key"></ul>
       <p class="hint"><a href="https://repdb.co" target="_blank" rel="nofollow noopener">Exercise data by RepDB (repdb.co)</a></p>
     </div>
+    <p id="rangeL" class="hint">Time range for all plots, and how far back the body map goes</p>
+    <div id="range" class="seg" role="group" aria-labelledby="rangeL"></div>
     <div id="charts" class="stack"></div>
     <button id="addPlot" type="button">Add a plot</button>
     <details>
@@ -1272,6 +1273,8 @@ function drawTrends() {
   segment('range', RANGES, 'weeks');
   const t = trendData(view.weeks), dash = getDash();
   const cards = dash.map((s, i) => (s === 'map' ? MAP : plotCard(s, t, () => plotBuilder(i))));
+  const first = dash.findIndex(s => s !== 'map'); // the range control sits just above the first plot
+  cards.splice(first < 0 ? cards.length : first, 0, $('rangeL'), $('range'));
   MAP.hidden = !dash.includes('map');
   if (MAP.hidden) cards.push(MAP); // kept in the page, hidden, so its controls stay wired up
   if (!dash.length) cards.unshift(h('p', { class: 'card hint' }, 'Your dashboard is empty. Add a plot to see your training over time.'));
