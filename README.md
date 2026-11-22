@@ -86,6 +86,42 @@ straight sets. A workout's planned sub-sets are kept as JSON in the
 `techniques` column of `Workouts`. CSV files exported before these columns
 existed still import.
 
+## Feed
+
+The Feed tab lists sessions that people chose to share, newest first. Everyone
+with a profile in the same Sheet (everyone who joined with its join code) can
+see every post, applaud it and comment on it.
+
+- **Sharing:** after **Save workout** on Train, tap **Share this session on the
+  Feed**, or tap **Share** on a day in History. A preview shows the post as it
+  will look. A caption (280 characters), an effort rating (session RPE, 1–10)
+  and set notes are optional; notes are left out unless you tick the box.
+  Body weight is never shared. One post per date and workout: sharing it
+  again updates the post and keeps its applause and comments.
+- **What a post shows:** sets (with sub-sets apart), lb lifted, new bests, up
+  to four highlights (new best, new estimated max, first time doing an
+  exercise, a muscle group reaching 10 sets this week, more than last time,
+  the streak in weeks) and sets per muscle group. All of them compare you with
+  your own past, never with others. The stats are a snapshot taken when you
+  post; the list of sets is read live from `Lifts`.
+- **Applause and comments:** one 👏 per person per post. You can delete your
+  own comments and any comment on your own posts. Deleting a post or the day
+  in History deletes its applause and comments too.
+- **Loading:** the Feed is read from the database only while the tab is
+  open, 30 posts at a time. Each sync also reports how many posts by others
+  are new, for the badge on the tab. Posts, applause and comments made
+  offline are queued like any other change.
+- **Without a database:** the Feed keeps your posts in this browser only, with
+  no applause or comments. The demo shows two example posts.
+- The sources behind these choices are in the app under **Feed → Why the
+  Feed works this way**.
+
+| Tab | Columns |
+| --- | --- |
+| `Posts` | `id`, `profile`, `date`, `workout`, `created` (ISO time), `caption`, `rpe`, `notes_on`, `stats` (JSON) |
+| `Reactions` | `post_id`, `profile`, `created` |
+| `Comments` | `id`, `post_id`, `profile`, `created`, `text` |
+
 ## Local/browser-only mode
 
 Open [`index.html`](index.html) directly, or serve this directory with any
@@ -197,6 +233,21 @@ saved workouts.
    headers to `Lifts` and `techniques` to `Workouts`. Existing rows are kept.
 3. **Deploy → Manage deployments → Edit**, choose **New version**, deploy.
 4. Publish the new `index.html`.
+
+### Updating a deployment for the Feed
+
+Do this before publishing the new `index.html`. An older backend answers the
+Feed tab with "Unknown request." and rejects posts, applause and comments.
+
+1. Paste the new [`backend/Code.gs`](backend/Code.gs) into the Apps Script
+   editor.
+2. Run `setup` once. It adds the `Posts`, `Reactions` and `Comments` tabs.
+   Existing tabs and rows are kept.
+3. **Deploy → Manage deployments → Edit**, choose **New version**, deploy.
+4. Publish the new `index.html`.
+5. Check with two profiles: share a session from one, then from the other
+   open Feed, applaud and comment; back on the first, the Feed tab shows a
+   badge and the comment.
 
 ## Data and security notes
 

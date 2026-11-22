@@ -101,8 +101,8 @@
   /* Tab bar */
   nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line);
     padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
-  nav div { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-  .tab { border: 0; background: none; font-size: 18px; text-transform: uppercase; color: var(--mute); min-height: 48px; padding: 0; }
+  nav div { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .tab { border: 0; background: none; font-size: 16px; text-transform: uppercase; color: var(--mute); min-height: 48px; padding: 0; }
   .tab[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); }
   /* Sheet (confirmations, swap picker, copy fallback) */
   #sheet { position: fixed; inset: 0; z-index: 20; background: rgba(8, 12, 20, .55); display: flex; align-items: flex-end; justify-content: center; }
@@ -118,7 +118,27 @@
   .mus { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
   .mus button { font-size: 14px; font-weight: 500; text-transform: capitalize; padding: 0 4px; display: flex; align-items: center; justify-content: center; }
   .mus button[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
-  .days details ul { padding-left: 18px; margin: 0; }
+  .days details ul, .post details ul { padding-left: 18px; margin: 0; }
+  /* Feed */
+  .badge { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--ink); color: var(--card);
+    font: 600 12px/18px var(--body); letter-spacing: 0; vertical-align: 2px; }
+  .post h3 { text-transform: none; overflow-wrap: anywhere; }
+  .post .caption { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tile { background: var(--bg); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .tile span:not(.num) { font-size: 13px; color: var(--mute); }
+  .hi { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+  .clap { align-self: flex-start; }
+  .clap[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .comments { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+  .comments li { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+  .comments li > span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .comments .mini { width: 36px; min-height: 36px; font-size: 14px; }
+  .say { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rpe button { font-size: 16px; padding: 0; }
+  .check { flex-direction: row; align-items: center; gap: 10px; font-weight: 500; font-size: 16px; }
+  .check input { width: 22px; height: 22px; min-height: 22px; flex: none; }
 </style>
 
 <main>
@@ -207,6 +227,7 @@
     <div id="tex" class="stack"></div>
     <button id="tadd" type="button" hidden>Add an exercise</button>
     <p id="tstatus" class="status" role="status" aria-live="polite"></p>
+    <button id="tshare" type="button" hidden>Share this session on the Feed</button>
     <button id="tsave" class="btn" type="button">Save workout</button>
   </section>
 
@@ -256,6 +277,32 @@
       <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes. Technique sub-sets are rows too, with <code>technique</code> filled in: <code>sub</code> is the place under the set (2.1 = first one nested under the second), <code>rest_s</code> the myo-rep rest, <code>rom</code> the share of the range for partials.</p>
     </div>
   </section>
+
+  <section id="vFeed" hidden>
+    <p id="fintro" class="hint"></p>
+    <p id="fweek" class="status"></p>
+    <div id="ffilter" class="seg" role="group" aria-label="Whose posts"></div>
+    <p id="fload" class="status" role="status" aria-live="polite"></p>
+    <p id="fstatus" class="status" role="status" aria-live="polite"></p>
+    <ul id="fposts" class="list"></ul>
+    <button id="fmore" type="button" hidden>Show older posts</button>
+    <details>
+      <summary>Why the Feed works this way</summary>
+      <ul>
+        <li>Sharing progress helps you keep going. In a meta-analysis of 138 studies, keeping track of progress toward a goal made people more likely to reach it, and more so when the progress was reported to others
+          (<a href="https://doi.org/10.1037/bul0000025" target="_blank" rel="noopener">Harkin et al. 2016</a>, Psychol Bull 142:198).</li>
+        <li>Support from people you train alongside had a moderate to large effect on sticking with exercise (Carron, Hausenblas &amp; Mack 1996, J Sport Exerc Psychol 18:1). That is why posts go only to the people in this log, who joined with its join code.</li>
+        <li>Every stat on a post compares you with your own past, never with someone else. Motivation that comes from your own goals predicts exercising for the long term
+          (<a href="https://doi.org/10.1186/1479-5868-9-78" target="_blank" rel="noopener">Teixeira et al. 2012</a>, review). There is no leaderboard.</li>
+        <li>Effort is session RPE: one rating from 1 to 10 for the whole session. It is a valid way to measure how hard a session was (Foster et al. 2001, J Strength Cond Res 15:109). The words follow Foster's scale.</li>
+        <li>The streak counts weeks, not days, and one missed week does not end it. Habits took a median of 66 days to form, and missing one chance did not set them back
+          (<a href="https://doi.org/10.1002/ejsp.674" target="_blank" rel="noopener">Lally et al. 2010</a>).</li>
+        <li>Body weight and photos are never shared. Viewing "fitspiration" images made people's mood and body satisfaction worse
+          (<a href="https://doi.org/10.1016/j.bodyim.2015.06.003" target="_blank" rel="noopener">Tiggemann &amp; Zaccardo 2015</a>).</li>
+        <li>New best = heavier than any earlier straight set of that exercise, or more reps at your best weight (lighter counts as better for assisted lifts), as on the Train tab. Estimated max uses the Epley formula, as Strength does on Trends. Sets per muscle count 1 for a primary muscle and ½ for a secondary one.</li>
+      </ul>
+    </details>
+  </section>
 </main>
 
 <nav id="nav"><div role="group" aria-label="Screen">
@@ -263,6 +310,7 @@
   <button class="tab" id="tabTrain" type="button" aria-pressed="false">Train</button>
   <button class="tab" id="tabBuild" type="button" aria-pressed="false">Build</button>
   <button class="tab" id="tabHistory" type="button" aria-pressed="false">History</button>
+  <button class="tab" id="tabFeed" type="button" aria-pressed="false">Feed<span id="feedBadge" class="badge" hidden></span></button>
 </div></nav>
 
 <div id="sheet" hidden><div role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -358,7 +406,7 @@ function toNum(v) {
 
 // ---------- Storage ----------
 
-const blank = () => ({ lifts: [], bw: [], workouts: [], exercises: [], outbox: [], demo: false });
+const blank = () => ({ lifts: [], bw: [], workouts: [], exercises: [], posts: [], outbox: [], demo: false }); // posts: Feed posts, kept here only without a database
 let S = blank();     // lifts rows follow LIFT_COLS, bw rows follow BW_COLS; exercises = the added ones; outbox = changes the database has not confirmed
 let D = null;        // the workout being logged, kept across reloads
 let canStore = true; // false = never write (storage blocked, or saved data unreadable and left untouched)
@@ -440,6 +488,7 @@ function clearExamples() {
 const newDraft = () => ({ date: today(), workout: '', oneOff: false, body: '', items: [] });
 const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(s => s.n || used(s)));
 function saveDraft() {
+  $('tshare').hidden = true; // the offer to share is for the session just saved, until the next one is started
   if (!canStore) return;
   try {
     localStorage.setItem(draftKey(), JSON.stringify(D));
@@ -474,10 +523,17 @@ function reindex() {
  * { t: 'lifts' | 'bw', rows }            add rows; exact repeats are skipped, so sending one twice is harmless
  * { t: 'workouts', workouts }            replace the list of saved workouts
  * { t: 'exercise', ex } / { t: 'delExercise', name }   add, change or remove an exercise that is not built in
- * { t: 'delDay', date }                  remove that day's sets and body weight
+ * { t: 'delDay', date }                  remove that day's sets and body weight (and its Feed posts)
+ * Feed (see applyFeedOp): { t: 'post', id, date, workout, caption, rpe, notes_on, stats, at } / { t: 'delPost', id }
+ *   { t: 'react', id, on } / { t: 'comment', id, post, text, at } / { t: 'delComment', id }
+ * With a database, Feed changes are not kept in S: the Feed tab shows the loaded posts with the queued changes laid over them.
  * Returns the number of rows added for 'lifts' and 'bw'.
  */
 function applyOp(op) {
+  if (FEED_OPS.has(op.t)) {
+    if (!REMOTE) S.posts = applyFeedOp(S.posts, op);
+    return;
+  }
   if (op.t === 'lifts' || op.t === 'bw') {
     const target = op.t === 'lifts' ? S.lifts : S.bw, seen = new Set(target.map(r => JSON.stringify(r)));
     let added = 0;
@@ -497,6 +553,7 @@ function applyOp(op) {
   if (op.t === 'delDay') {
     S.lifts = S.lifts.filter(r => r[0] !== op.date);
     S.bw = S.bw.filter(r => r[0] !== op.date);
+    if (!REMOTE) S.posts = applyFeedOp(S.posts, op);
   }
   reindex();
 }
@@ -662,7 +719,7 @@ async function api(body) {
   return o;
 }
 
-const net = { busy: false, again: false, err: '' };
+const net = { busy: false, again: false, err: '', fresh: 0 }; // fresh = posts by others newer than the Feed last shown here
 
 /** Uploads the queued changes, then replaces this device's copy with what the database holds. One request at a time. */
 async function sync() {
@@ -673,8 +730,13 @@ async function sync() {
   drawSync();
   const who = session, sent = Math.min(S.outbox.length, 100);
   try {
-    const res = await api({ action: 'sync', token: who.token, ops: S.outbox.slice(0, sent) });
+    const ops = S.outbox.slice(0, sent);
+    const res = await api({ action: 'sync', token: who.token, ops, seen: feedSeen() });
     if (session !== who) return; // signed out while the request was in the air
+    // Feed changes the database now has: keep showing them until the Feed is next loaded.
+    const out = new Set(res.rejected.map(r => r.i)), posted = ops.filter((op, i) => !out.has(i) && (FEED_OPS.has(op.t) || op.t === 'delDay'));
+    F.applied.push(...posted);
+    if (typeof res.fresh === 'number') net.fresh = res.fresh;
     const later = S.outbox.slice(sent); // changes made while the request was in the air: put them back on top
     S = { ...blank(), lifts: res.lifts, bw: res.bw, workouts: res.workouts, exercises: res.exercises, synced: Date.now() };
     reindex();
@@ -688,6 +750,7 @@ async function sync() {
     }
     if (res.rejected.length) say('warn', `The database did not accept ${res.rejected.length} change(s), so they were dropped: ${res.rejected.map(r => r.why).join(' ')}`, 'err');
     refresh();
+    if (!$('vFeed').hidden && (posted.length || net.fresh)) loadFeed();
   } catch (err) {
     if (session !== who) return;
     if (err.code === 'auth') { reSignIn(); return; }
@@ -717,12 +780,14 @@ function refresh() {
   buildPicker.redraw();
   drawHistory();
   drawSync();
+  drawBadge();
   if (!$('vTrends').hidden) drawTrends();
+  if (!$('vFeed').hidden && !typingIn('vFeed')) drawFeed();
 }
 
 /** Shows the sign-in screen, or loads the signed-in profile (or this browser's own data when there is no database). */
 function enter() {
-  ['warn', 'tstatus', 'bstatus', 'dstatus', 'hstatus', 'estatus', 'gstatus'].forEach(id => say(id, ''));
+  ['warn', 'tstatus', 'bstatus', 'dstatus', 'hstatus', 'estatus', 'gstatus', 'fstatus', 'fload'].forEach(id => say(id, ''));
   $('who').hidden = !session;
   $('who').textContent = session ? session.profile : '';
   if (session) $('who').setAttribute('aria-label', `Profile ${session.profile}: sync and sign out`);
@@ -733,6 +798,7 @@ function enter() {
     return setView('Gate');
   }
   load();
+  resetFeed();
   B.editing = null;
   B.items = [];
   $('bname').value = '';
@@ -1756,6 +1822,10 @@ async function saveSession() {
     refresh();
     say('tstatus', `Saved ${added} set(s) and sub-set(s)${body !== '' ? ' and body weight' : ''} for ${date}.` +
       (added < out.length ? ` ${out.length - added} were exact repeats of ones already logged and were skipped.` : ''), 'ok');
+    if (out.length) {
+      justSaved = { date, workout };
+      $('tshare').hidden = false;
+    }
   } catch (err) {
     say('tstatus', `Not saved: ${msgOf(err)}`, 'err');
   }
@@ -1903,25 +1973,35 @@ function drawHistory() {
   if (!added.length) $('hcustom').append(h('li', { class: 'hint' }, 'None yet. Anything added here shows up in every exercise search and in the muscle charts.'));
 }
 
-function dayCard(date, d) {
-  const names = [...new Set(d.sets.map(r => r[1]).filter(Boolean))], byEx = new Map();
+/** One line per exercise: its sets as weight × reps, sub-sets nested with ↳. Notes only when `notes` is true. */
+function setList(rows, notes) {
+  const byEx = new Map();
   // A set's note is shown once; a sub-set row repeats its set's note, and older rows repeat one note on every set.
   const shown = new Map();
-  const note = r => { const n = String(r[6] || '').trim(), dup = shown.get(r[2]) === n; shown.set(r[2], n); return n && !dup ? ` (${n})` : ''; };
-  d.sets.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}${note(r)}`
+  const note = r => { const n = notes ? String(r[6] || '').trim() : '', dup = shown.get(r[2]) === n; shown.set(r[2], n); return n && !dup ? ` (${n})` : ''; };
+  rows.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}${note(r)}`
     : `${'↳'.repeat(r[7].split('.').length)} ${r[8]} ${r[5]} × ${r[4]}${r[10] ? ` at ${r[10] * 100}% range` : ''}${r[9] === '' ? '' : ` after ${r[9]} s`}`));
+  return h('ul', {}, [...byEx].map(([ex, sets]) => h('li', {}, `${ex}: ${sets.join(', ')}`)));
+}
+
+function dayCard(date, d) {
+  const names = [...new Set(d.sets.map(r => r[1]).filter(Boolean))], sessions = [...new Set(d.sets.map(r => r[1]))];
   const main = d.sets.filter(r => !r[8]).length, tech = d.sets.length - main;
   const facts = [names.join(', '), main && `${main} set${main > 1 ? 's' : ''}`, tech && `${tech} technique`, d.body.length && `body weight ${d.body.join(', ')}`];
+  const share = w => h('button', { type: 'button', 'aria-label': `Share ${w || 'this session'} from ${date} on the Feed`, onclick: () => shareSheet(date, w) },
+    sessions.length > 1 ? `Share ${w || 'session'}` : 'Share');
   return h('li', { class: 'card' },
     h('div', { class: 'between' },
       h('div', {}, h('h3', { style: 'text-transform:none' }, longDate(date)), h('p', { class: 'hint' }, facts.filter(Boolean).join(' · '))),
-      h('button', { type: 'button', class: 'danger', 'aria-label': `Delete ${date}`, onclick: () => removeDay(date) }, 'Delete')),
-    byEx.size > 0 && h('details', {}, h('summary', {}, 'Sets (weight × reps, notes)'),
-      h('ul', {}, [...byEx].map(([ex, sets]) => h('li', {}, `${ex}: ${sets.join(', ')}`)))));
+      h('div', { class: 'acts' },
+        sessions.length === 1 && share(sessions[0]),
+        h('button', { type: 'button', class: 'danger', 'aria-label': `Delete ${date}`, onclick: () => removeDay(date) }, 'Delete'))),
+    sessions.length > 1 && h('div', { class: 'wrap' }, sessions.map(share)),
+    d.sets.length > 0 && h('details', {}, h('summary', {}, 'Sets (weight × reps, notes)'), setList(d.sets, true)));
 }
 
 async function removeDay(date) {
-  if (!await ask(`Delete everything logged on ${date}: its sets and its body weight? This can't be undone.`, 'Delete')) return;
+  if (!await ask(`Delete everything logged on ${date}: its sets, its body weight and any Feed post that shares it? This can't be undone.`, 'Delete')) return;
   try {
     act({ t: 'delDay', date });
     refresh();
@@ -1940,6 +2020,330 @@ async function removeExercise(name) {
   } catch (err) {
     say('hstatus', `Not removed: ${msgOf(err)}`, 'err');
   }
+}
+
+// ---------- Feed: shared sessions, with reactions and comments ----------
+
+const FEED_OPS = new Set(['post', 'delPost', 'react', 'comment', 'delComment']);
+const MAX_CAPTION = 280, MAX_COMMENT = 500;
+// Session RPE words, from Foster et al. 2001's scale (sources under "Why the Feed works this way").
+const EFFORT = ['', 'very easy', 'easy', 'moderate', 'somewhat hard', 'hard', 'hard', 'very hard', 'very hard', 'very hard', 'maximal'];
+/**
+ * With a database: posts = the last loaded page(s), newest first; applied = Feed changes the database has accepted since that load,
+ * still laid over the posts until the next load. Loaded only while the Feed tab is open; never stored on the device.
+ */
+const F = { posts: [], applied: [], loaded: false, busy: false, again: false, err: '', more: false, week: null, filter: 'all', drafts: {}, open: {} };
+let justSaved = null; // { date, workout } of the session just saved on Train, for its Share button
+
+function resetFeed() {
+  Object.assign(F, { posts: [], applied: [], loaded: false, busy: false, again: false, err: '', more: false, week: null, drafts: {}, open: {} });
+  net.fresh = 0;
+  justSaved = null;
+  $('tshare').hidden = true;
+  drawBadge();
+}
+
+const me = () => (REMOTE ? (session ? session.profile : '') : 'You');
+const mineP = p => same(p.profile, me());
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const dayRows = (date, workout) => S.lifts.filter(r => r[0] === date && r[1] === workout);
+const typingIn = id => { const a = document.activeElement; return !!a && $(id).contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); };
+const ago = iso => {
+  const d = new Date(iso), mins = (Date.now() - d) / 6e4;
+  if (isNaN(d)) return '';
+  return mins < 1 ? 'just now' : mins < 60 ? `${Math.floor(mins)} min ago` : mins < 1440 ? `${Math.floor(mins / 60)} h ago`
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const seenKey = () => `${KEY6}.feedseen.${session.profile.toLowerCase()}`;
+function feedSeen() {
+  try {
+    return (session && localStorage.getItem(seenKey())) || '';
+  } catch (err) {
+    return '';
+  }
+}
+/** The newest post by someone else that has been shown, so the tab badge only counts posts after it. */
+function markSeen() {
+  const newest = F.posts.filter(p => !mineP(p)).reduce((t, p) => (p.created > t ? p.created : t), '');
+  try {
+    if (newest > feedSeen()) localStorage.setItem(seenKey(), newest);
+  } catch (err) { /* storage is blocked: the badge just counts from the start */ }
+  net.fresh = 0;
+  drawBadge();
+}
+function drawBadge() {
+  const n = REMOTE && session && $('vFeed').hidden ? net.fresh : 0;
+  $('feedBadge').hidden = !n;
+  $('feedBadge').textContent = n > 9 ? '9+' : String(n);
+  $('tabFeed').setAttribute('aria-label', n ? `Feed, ${n} new post${n > 1 ? 's' : ''}` : 'Feed');
+}
+
+/** One Feed change applied to a list of posts, returning a new list. The database's `sync` does the same (Code.gs). */
+function applyFeedOp(list, op) {
+  const edit = (id, fn) => list.map(p => (p.id === id ? fn(p) : p));
+  if (op.t === 'post') {
+    const old = list.find(p => p.id === op.id) || list.find(p => mineP(p) && p.date === op.date && p.workout === op.workout), keep = old && old.id === op.id;
+    const p = { id: op.id, profile: me(), date: op.date, workout: op.workout, created: keep ? old.created : op.at, caption: op.caption, rpe: op.rpe,
+      notes_on: op.notes_on, stats: op.stats, reactions: keep ? old.reactions : [], comments: keep ? old.comments : [] };
+    return keep ? list.map(q => (q === old ? p : q)) : [p, ...list.filter(q => q !== old)];
+  }
+  if (op.t === 'delPost') return list.filter(p => !(p.id === op.id && mineP(p)));
+  if (op.t === 'delDay') return list.filter(p => !(mineP(p) && p.date === op.date));
+  if (op.t === 'react') return edit(op.id, p => ({ ...p, reactions: p.reactions.filter(n => !same(n, me())).concat(op.on ? [me()] : []) }));
+  if (op.t === 'comment') return edit(op.post, p => (p.comments.some(c => c.id === op.id) ? p
+    : { ...p, comments: p.comments.concat({ id: op.id, profile: me(), created: op.at, text: op.text }) }));
+  if (op.t === 'delComment') return list.map(p => (p.comments.some(c => c.id === op.id) ? { ...p, comments: p.comments.filter(c => c.id !== op.id) } : p));
+  return list;
+}
+
+/** What the Feed tab shows: loaded posts with this device's accepted and queued changes on top (or this browser's own posts). */
+function feedPosts() {
+  if (!REMOTE) return S.demo ? examplePosts() : S.posts;
+  return F.applied.concat(S.outbox).reduce((list, op) => (FEED_OPS.has(op.t) || op.t === 'delDay' ? applyFeedOp(list, op) : list), F.posts);
+}
+
+/** Two posts made from the example history, so the empty demo shows what a post looks like. Never stored. */
+function examplePosts() {
+  const days = [...new Map(S.lifts.map(r => [JSON.stringify([r[0], r[1]]), [r[0], r[1]]])).values()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 2);
+  return days.map(([date, workout], i) => ({ id: `ex${i}`, example: true, profile: 'Example', date, workout, created: date,
+    caption: i ? '' : 'An example post. Yours will look like this once you share a session.', rpe: 7 - i, notes_on: false,
+    stats: postStats(date, workout), reactions: [], comments: [], sets: dayRows(date, workout) }));
+}
+
+/**
+ * The stats a post carries, from this profile's history up to that day: tiles, up to 4 highlights, and sets per muscle group.
+ * Every highlight compares the session with your own earlier sessions. Bests and estimated maxes use straight sets only, as stats() does.
+ */
+function postStats(date, workout) {
+  const day = dayRows(date, workout), straight = day.filter(r => !r[8]), earlier = S.lifts.filter(r => r[0] < date && !r[8]);
+  const assisted = name => /assisted/i.test(name);
+  const better = (a, b, name) => !b || (assisted(name) ? a.weight < b.weight : a.weight > b.weight) || (a.weight === b.weight && a.reps > b.reps);
+  const top = (rows, name) => rows.reduce((b, r) => { const c = { weight: r[5], reps: r[4] }; return better(c, b, name) ? c : b; }, null);
+  const est = r => (r[4] <= 10 && r[5] > 0 && !assisted(r[2]) ? (r[4] === 1 ? r[5] : r[5] * (1 + r[4] / 30)) : 0); // Epley, as trendData()
+  const hi = []; // [rank, sentence]
+  let bests = 0;
+  [...new Set(straight.map(r => r[2].trim()))].forEach(name => {
+    const now = straight.filter(r => same(r[2], name)), before = earlier.filter(r => same(r[2], name));
+    if (!before.length) return hi.push([3, `First time doing ${name}.`]);
+    const t = top(now, name);
+    if (better(t, top(before, name), name)) {
+      bests++;
+      return hi.push([1, `New best on ${name}: ${t.weight} × ${t.reps}.`]);
+    }
+    const e1 = Math.max(0, ...now.map(est)), e0 = Math.max(0, ...before.map(est));
+    if (e0 && e1 > e0) return hi.push([2, `New estimated max on ${name}: about ${Math.round(e1)} lb.`]);
+    const last = before.reduce((d, r) => (r[0] > d ? r[0] : d), ''), lt = top(before.filter(r => r[0] === last), name), on = shortDate(dayNum(last));
+    if (!better(t, lt, name)) return;
+    const dw = fmt(Math.abs(t.weight - lt.weight)), dr = t.reps - lt.reps;
+    hi.push([5, t.weight !== lt.weight ? `${name}: top set ${dw} lb ${assisted(name) ? 'less assistance' : 'heavier'} than on ${on}.`
+      : `${name}: ${dr} more rep${dr > 1 ? 's' : ''} at ${t.weight} lb than on ${on}.`]);
+  });
+  // Sets per muscle group, 1 for a primary muscle and ½ for a secondary one, as on Trends.
+  const tally = rows => {
+    const t = {};
+    rows.forEach(r => {
+      const e = BY.get(r[2].trim().toLowerCase());
+      if (!e) return;
+      e.primary.forEach(m => { t[m] = (t[m] || 0) + 1; });
+      e.secondary.forEach(m => { t[m] = (t[m] || 0) + 0.5; });
+    });
+    return t;
+  };
+  const mine = tally(straight), mon = monday(dayNum(date));
+  const before = tally(S.lifts.filter(r => !r[8] && monday(dayNum(r[0])) === mon && (r[0] < date || (r[0] === date && r[1] !== workout))));
+  Object.entries(mine).filter(([m, n]) => (before[m] || 0) < WEEK_REF && (before[m] || 0) + n >= WEEK_REF).slice(0, 2)
+    .forEach(([m, n]) => hi.push([4, `${m[0].toUpperCase() + m.slice(1)} reached ${WEEK_REF} sets this week (${fmt((before[m] || 0) + n)}).`]));
+  // Streak in weeks: one week off does not end it, two in a row do.
+  const trained = new Set(S.lifts.filter(r => r[0] <= date).map(r => monday(dayNum(r[0]))));
+  let n = 0, span = 0, gap = 0;
+  for (let w = mon; gap < 2 && span < 104; w -= 7, span++) {
+    if (trained.has(w)) { n++; gap = 0; } else gap++;
+  }
+  span -= gap;
+  if (n >= 3) hi.push([6, n === span ? `${n} weeks in a row with training.` : `Trained ${n} of the last ${span} weeks.`]);
+  return {
+    sets: straight.length, sub: day.length - straight.length, bests,
+    load: Math.round(day.reduce((t, r) => t + r[5] * r[4] * (r[10] || 1), 0)),
+    hi: hi.sort((a, b) => a[0] - b[0]).slice(0, 4).map(x => x[1].slice(0, 160)),
+    mus: Object.entries(mine).filter(([m]) => MUSCLES.includes(m)).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([m, v]) => [m, Math.round(v * 2) / 2]),
+  };
+}
+
+/** A post. opt.preview = the copy shown while writing one (no buttons). */
+function postCard(p, opt = {}) {
+  const own = mineP(p), st = p.stats, social = REMOTE && !opt.preview && !p.example, manage = own && !opt.preview && !p.example;
+  const rows = own && !p.example ? dayRows(p.date, p.workout) : p.sets || [];
+  const who = REMOTE && own ? `${p.profile} (you)` : p.profile;
+  const tile = (value, what, extra) => h('div', { class: 'tile' }, h('span', { class: 'num' }, value), h('span', {}, what), extra ? h('span', {}, extra) : null);
+  const kids = [
+    h('div', { class: 'between' },
+      h('div', {}, h('h3', {}, p.workout || 'Workout'),
+        h('p', { class: 'hint' }, [who, longDate(p.date), p.rpe ? `effort ${p.rpe}/10, ${EFFORT[p.rpe]}` : ''].filter(Boolean).join(' · '))),
+      manage ? h('div', { class: 'acts' },
+        h('button', { type: 'button', 'aria-label': `Edit your post for ${p.date}`, onclick: () => shareSheet(p.date, p.workout) }, 'Edit'),
+        h('button', { type: 'button', class: 'danger', 'aria-label': `Delete your post for ${p.date}`, onclick: () => removePost(p) }, 'Delete')) : null),
+    p.caption ? h('p', { class: 'caption' }, p.caption) : null,
+    h('div', { class: 'tiles' },
+      tile(big(st.sets), st.sets === 1 ? 'set' : 'sets', st.sub ? `+ ${st.sub} sub-set${st.sub > 1 ? 's' : ''}` : ''),
+      tile(big(st.load), 'lb lifted'),
+      tile(String(st.bests), st.bests === 1 ? 'new best' : 'new bests')),
+    st.hi.length ? h('ul', { class: 'hi' }, st.hi.map(t => h('li', {}, t))) : null,
+    st.mus.length ? h('p', { class: 'hint' }, `Sets per muscle: ${st.mus.map(([m, v]) => `${m} ${fmt(v)}`).join(' · ')}`) : null,
+    rows.length ? h('details', {}, h('summary', {}, p.notes_on ? 'Every set (weight × reps, notes)' : 'Every set (weight × reps)'), setList(rows, p.notes_on)) : null,
+  ];
+  if (social) {
+    const n = p.reactions.length, clapped = p.reactions.some(x => same(x, me())), names = n ? h('span', { class: 'hint' }, `👏 ${p.reactions.join(', ')}`) : null;
+    kids.push(own ? names : h('div', { class: 'wrap', style: 'align-items:center' },
+      h('button', { type: 'button', class: 'clap', 'aria-pressed': String(clapped), 'aria-label': clapped ? 'Take back your applause' : `Applaud ${p.profile}'s session`,
+        onclick: () => feedAct({ t: 'react', id: p.id, on: !clapped }) }, n ? `👏 ${n}` : '👏'), names));
+    const cs = p.comments, shown = F.open[p.id] || cs.length <= 3 ? cs : cs.slice(-3);
+    if (cs.length > shown.length) kids.push(h('button', { type: 'button', onclick: () => { F.open[p.id] = true; drawFeed(); } }, `Show all ${cs.length} comments`));
+    if (shown.length) kids.push(h('ul', { class: 'comments' }, shown.map(c => h('li', {},
+      h('span', {}, h('b', {}, c.profile), ` ${c.text} `, h('span', { class: 'hint' }, ago(c.created))),
+      same(c.profile, me()) || own ? h('button', { type: 'button', class: 'mini danger', 'aria-label': `Delete ${c.profile}'s comment`, onclick: () => removeComment(c) }, '✕') : null))));
+    const box = h('input', { type: 'text', maxLength: MAX_COMMENT, autocomplete: 'off', placeholder: 'Add a comment', 'aria-label': `Comment on ${p.profile}'s ${p.workout || 'session'}`,
+      value: F.drafts[p.id] || '', oninput: ev => { F.drafts[p.id] = ev.target.value; },
+      onkeydown: ev => { if (ev.key === 'Enter') { ev.preventDefault(); sendComment(p); } } });
+    kids.push(h('div', { class: 'say' }, box, h('button', { type: 'button', onclick: () => sendComment(p) }, 'Send')));
+  }
+  return h('article', { class: 'card post' }, kids);
+}
+
+function drawFeed() {
+  const all = feedPosts(), list = F.filter === 'me' ? all.filter(mineP) : all, wk = REMOTE && F.week;
+  $('fintro').textContent = REMOTE
+    ? 'Sessions shared by everyone in this log, newest first. Share yours after saving it on Train, or from any day in History.'
+    : 'This log has no shared database, so only you see these posts, in this browser. Share a session after saving it on Train, or from any day in History.';
+  $('fweek').textContent = !wk ? '' : wk.trained
+    ? `This week, ${wk.trained} of the ${wk.people} people in this log ${wk.trained === 1 ? 'has' : 'have'} trained, with ${wk.sessions} session${wk.sessions === 1 ? '' : 's'} logged.`
+    : 'This week, nobody in this log has logged a session yet.';
+  $('ffilter').hidden = !REMOTE;
+  $('ffilter').replaceChildren(...[['Everyone', 'all'], ['Me', 'me']].map(([text, v]) => h('button', {
+    type: 'button', 'aria-pressed': String(F.filter === v), onclick: () => { F.filter = v; drawFeed(); },
+  }, text)));
+  say('fload', !REMOTE ? '' : F.busy ? (F.loaded ? 'Checking for new posts…' : 'Loading the Feed…')
+    : F.err ? `Could not load the Feed: ${F.err}${F.loaded ? ' Showing the posts loaded earlier.' : ''} Your own posts and comments upload when the database can be reached.` : '',
+  F.err && !F.busy ? 'err' : '');
+  $('fposts').replaceChildren(...list.map(p => h('li', {}, postCard(p))));
+  if (!list.length && !(REMOTE && (F.busy || !F.loaded))) {
+    $('fposts').append(h('li', { class: 'hint' }, F.filter === 'me' ? 'You have not shared a session yet.'
+      : REMOTE ? 'Nobody has shared a session yet. Save a workout on Train and share it to be the first.' : 'Nothing shared yet.'));
+  }
+  $('fmore').hidden = !(REMOTE && F.more && !F.busy);
+}
+
+/** Reads the newest posts from the database (older = the next page down). Runs when the Feed tab is opened. */
+async function loadFeed(older) {
+  if (!REMOTE || !session) return;
+  if (F.busy) { F.again = F.again || !older; return; }
+  F.busy = true;
+  F.err = '';
+  drawFeed();
+  const who = session, upto = F.applied.length, last = F.posts[F.posts.length - 1];
+  try {
+    const res = await api({ action: 'feed', token: who.token, week: numYmd(monday(dayNum(today()))), before: older && last ? last.created : '' });
+    if (session !== who) return;
+    if (older) {
+      F.posts = F.posts.concat(res.posts.filter(p => !F.posts.some(q => q.id === p.id)));
+    } else {
+      F.posts = res.posts;
+      F.applied = F.applied.slice(upto); // the rest were accepted after this request was sent, so they may not be in it
+      F.week = res.week;
+    }
+    F.more = res.more;
+    F.loaded = true;
+    markSeen();
+  } catch (err) {
+    if (session !== who) return;
+    if (err.code === 'auth') { reSignIn(); return; }
+    F.err = msgOf(err);
+  } finally {
+    if (session === who) {
+      F.busy = false;
+      if (!$('vFeed').hidden && !typingIn('vFeed')) drawFeed();
+      if (F.again) { F.again = false; loadFeed(); }
+    }
+  }
+}
+
+/** A Feed change from a button on a post. Returns true when it was made. */
+function feedAct(op) {
+  try {
+    act(op);
+    say('fstatus', '');
+    drawFeed();
+    return true;
+  } catch (err) {
+    say('fstatus', `Not saved: ${msgOf(err)}`, 'err');
+    return false;
+  }
+}
+function sendComment(p) {
+  const text = (F.drafts[p.id] || '').trim();
+  if (!text) return;
+  const draft = F.drafts[p.id];
+  F.drafts[p.id] = '';
+  if (!feedAct({ t: 'comment', id: newId(), post: p.id, text, at: new Date().toISOString() })) F.drafts[p.id] = draft;
+}
+async function removePost(p) {
+  if (!await ask(`Delete your post for ${p.workout || 'this session'} on ${p.date}? Its reactions and comments go too. The workout itself stays in History.`, 'Delete post')) return;
+  if (feedAct({ t: 'delPost', id: p.id })) say('fstatus', 'Post deleted.', 'ok');
+}
+async function removeComment(c) {
+  if (!await ask(`Delete ${same(c.profile, me()) ? 'your' : `${c.profile}'s`} comment “${c.text.slice(0, 60)}${c.text.length > 60 ? '…' : ''}”?`, 'Delete')) return;
+  feedAct({ t: 'delComment', id: c.id });
+}
+
+/** Writes or updates the post for one logged session (date + workout), with a live preview. */
+function shareSheet(date, workout) {
+  const rows = dayRows(date, workout);
+  if (!rows.length) return;
+  const was = feedPosts().find(p => mineP(p) && !p.example && p.date === date && p.workout === workout);
+  const stats = postStats(date, workout), hasNotes = rows.some(r => String(r[6] || '').trim());
+  const d = { caption: was ? was.caption : '', rpe: was ? was.rpe : '', notes: !!(was && was.notes_on) };
+  const preview = h('div'), left = h('p', { class: 'hint' }), word = h('p', { class: 'hint' }), msg = h('p', { class: 'status', role: 'status' });
+  const effort = h('div', { class: 'seg rpe', role: 'group', 'aria-label': 'Effort, from 1 to 10' });
+  const show = () => preview.replaceChildren(postCard({ id: '', profile: me(), date, workout, caption: d.caption.trim(), rpe: d.rpe, notes_on: d.notes, stats, reactions: [], comments: [] }, { preview: true }));
+  const count = () => { left.textContent = `${MAX_CAPTION - d.caption.length} characters left.`; };
+  const drawEffort = () => {
+    effort.replaceChildren(...EFFORT.slice(1).map((_, i) => h('button', {
+      type: 'button', 'aria-pressed': String(d.rpe === i + 1), 'aria-label': `${i + 1}, ${EFFORT[i + 1]}`,
+      onclick: () => { d.rpe = d.rpe === i + 1 ? '' : i + 1; drawEffort(); show(); },
+    }, String(i + 1))));
+    word.textContent = d.rpe ? `${d.rpe}: ${EFFORT[d.rpe]}. Tap it again to clear.` : 'Optional. Rate the whole session: 1 is very easy, 10 is the hardest you could work.';
+  };
+  const cap = h('textarea', { rows: 3, maxLength: MAX_CAPTION, placeholder: 'Optional', oninput: ev => { d.caption = ev.target.value; count(); show(); } });
+  cap.value = d.caption;
+  const post = () => {
+    try {
+      act({ t: 'post', id: was ? was.id : newId(), date, workout, caption: d.caption.trim(), rpe: d.rpe, notes_on: d.notes, stats, at: new Date().toISOString() });
+      closeSheet();
+      $('tshare').hidden = true;
+      F.filter = 'all';
+      setView('Feed');
+      say('fstatus', REMOTE ? `${was ? 'Updated' : 'Shared'}. Everyone in this log can see it.` : `${was ? 'Updated' : 'Shared'}.`, 'ok');
+    } catch (err) {
+      msg.textContent = `Not posted: ${msgOf(err)}`;
+      msg.className = 'status err';
+    }
+  };
+  count();
+  drawEffort();
+  show();
+  openSheet(was ? 'Update your post' : 'Share this session', [
+    preview,
+    h('label', {}, 'Caption', cap), left,
+    h('p', { class: 'lab' }, 'How hard was it?'), effort, word,
+    hasNotes ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: d.notes, onchange: ev => { d.notes = ev.target.checked; show(); } }), 'Include my set notes') : null,
+    h('p', { class: 'hint' }, REMOTE ? 'Everyone with a profile in this log can see this post, applaud it and comment. Body weight is never shared.'
+      : 'There is no shared database here, so only you see this post, in this browser.'),
+    was ? h('p', { class: 'hint' }, 'You already shared this session. Posting again updates that post and keeps its applause and comments.') : null,
+    msg,
+    h('div', { class: 'row' },
+      h('button', { type: 'button', onclick: closeSheet }, 'Not now'),
+      h('button', { type: 'button', class: 'btn', style: 'min-height:44px', onclick: post }, was ? 'Update post' : 'Post')),
+  ].filter(Boolean));
 }
 
 // ---------- CSV in and out ----------
@@ -2111,20 +2515,25 @@ async function exportCsv(name, header, rows) {
 // ---------- Wiring ----------
 
 function setView(name) {
-  ['Gate', 'Trends', 'Train', 'Build', 'History'].forEach(v => {
+  ['Gate', 'Trends', 'Train', 'Build', 'History', 'Feed'].forEach(v => {
     $('v' + v).hidden = v !== name;
     if (v !== 'Gate') $('tab' + v).setAttribute('aria-pressed', String(v === name));
   });
   $('nav').hidden = name === 'Gate';
+  drawBadge();
   if (name === 'Trends') drawTrends();
   if (name === 'History') drawHistory();
+  if (name === 'Feed') {
+    drawFeed();
+    loadFeed();
+  }
   window.scrollTo(0, 0);
 }
 
 window.addEventListener('error', ev => say('warn', `App error: ${ev.message}`, 'err'));
 window.addEventListener('unhandledrejection', ev => say('warn', `App error: ${msgOf(ev.reason)}`, 'err'));
 
-['Trends', 'Train', 'Build', 'History'].forEach(v => $('tab' + v).addEventListener('click', () => setView(v)));
+['Trends', 'Train', 'Build', 'History', 'Feed'].forEach(v => $('tab' + v).addEventListener('click', () => setView(v)));
 $('sheetX').addEventListener('click', () => { const cancel = sheetCancel; closeSheet(); if (cancel) cancel(); });
 $('demoClear').addEventListener('click', () => {
   try {
@@ -2144,6 +2553,8 @@ $('tdate').addEventListener('change', ev => { D.date = ev.target.value; saveDraf
 $('tbody').addEventListener('input', ev => { D.body = ev.target.value; saveDraft(); });
 $('tadd').addEventListener('click', addToSession);
 $('tsave').addEventListener('click', saveSession);
+$('tshare').addEventListener('click', () => justSaved && shareSheet(justSaved.date, justSaved.workout));
+$('fmore').addEventListener('click', () => loadFeed(true));
 $('bsave').addEventListener('click', saveBuilt);
 $('bcancel').addEventListener('click', () => { say('bstatus', ''); resetBuild(); });
 $('hpast').addEventListener('click', () => { setView('Train'); $('tdate').focus(); });

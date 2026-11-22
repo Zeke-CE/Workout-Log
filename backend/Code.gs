@@ -16,6 +16,11 @@ const TABS = {
   Lifts: { cols: ['profile', 'date', 'workout', 'exercise', 'set', 'reps', 'weight_lb', 'notes', 'sub', 'technique', 'rest_s', 'rom'], text: [[1, 4], [8, 3]] },
   Body_Weight: { cols: ['profile', 'date', 'body_weight_lb'], text: [[1, 2]] },
   Config: { cols: ['key', 'value'], text: [[1, 2]] },
+  // The Feed: a shared session (one per profile, date and workout), its reactions and its comments. Everyone signed in to this log can read them.
+  // stats = JSON snapshot made by the page when posting; the sets themselves are read live from Lifts.
+  Posts: { cols: ['id', 'profile', 'date', 'workout', 'created', 'caption', 'rpe', 'notes_on', 'stats'], text: [[1, 6], [9, 1]] },
+  Reactions: { cols: ['post_id', 'profile', 'created'], text: [[1, 3]] },
+  Comments: { cols: ['id', 'post_id', 'profile', 'created', 'text'], text: [[1, 5]] },
 };
 const MUSCLES = ['abdominals', 'abductors', 'adductors', 'biceps', 'calves', 'chest', 'forearms', 'glutes', 'hamstrings', 'lats', 'lower back', 'middle back', 'neck', 'quadriceps', 'shoulders', 'traps', 'triceps'];
 // The exact muscles an added exercise can list: the keys of XWALK in index.html. Primary_muscles/Secondary_muscles hold these; Primary/Secondary hold their groups.
@@ -27,7 +32,8 @@ const EQUIP = ['bands', 'barbell', 'body only', 'cable', 'dumbbell', 'e-z curl b
 const MECHANICS = ['', 'compound', 'isolation'];
 const TECHNIQUES = ['partial', 'myo', 'rest-pause', 'drop'], SUB = /^[1-9](\.[1-9]){0,2}$/;
 const FORMULA_START = /^[=+\-@]/; // Sheets would run these as formulas, so they are stored behind an apostrophe
-const MAX = { ops: 200, rows: 20000, name: 80, notes: 500, workouts: 60, items: 40, sets: 10 };
+const MAX = { ops: 200, rows: 20000, name: 80, notes: 500, workouts: 60, items: 40, sets: 10, caption: 280, comment: 500, feed: 30 };
+const ID = /^[a-z0-9]{8,40}$/; // post and comment ids, made by the page so a retried request never doubles anything
 
 // ---------- Web app entry points ----------
 
@@ -41,7 +47,7 @@ function doPost(e) {
   try {
     lock.waitLock(25000); // one request at a time, so two phones cannot interleave writes
     const req = JSON.parse(e.postData.contents);
-    const handler = { signup: signup, login: login, sync: sync }[req.action];
+    const handler = { signup: signup, login: login, sync: sync, feed: feed }[req.action];
     if (!handler) throw fail('Unknown request.');
     out = handler(req);
     out.ok = true;
@@ -92,6 +98,10 @@ function tab(name) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
   if (!sh) throw fail('The database is not set up yet: its owner needs to run "setup" in the Apps Script editor.', 'server');
   return sh;
+}
+
+function hasTab(name) {
+  return !!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
 }
 
 function readRows(name) {
@@ -302,6 +312,38 @@ function cleanExercise(x) {
   return out;
 }
 
+/** A post's stats, as the page computed them: tiles, up to 4 highlight sentences and up to 6 [muscle group, sets]. */
+function cleanStats(s) {
+  const upTo = (v, hi) => typeof v === 'number' && isFinite(v) && v >= 0 && v <= hi;
+  if (!s || typeof s !== 'object' || !whole(s.sets, 0, 9999) || !whole(s.sub, 0, 9999) || !upTo(s.load, 1e9) || !whole(s.bests, 0, 99)
+    || !Array.isArray(s.hi) || s.hi.length > 4 || !Array.isArray(s.mus) || s.mus.length > 6) throw fail('The post\'s stats are not valid.');
+  return {
+    sets: s.sets, sub: s.sub, load: Math.round(s.load), bests: s.bests,
+    hi: s.hi.map(t => label(t, 'A highlight', 160, true)),
+    mus: s.mus.map(m => {
+      if (!Array.isArray(m) || MUSCLES.indexOf(m[0]) < 0 || !upTo(m[1], 999)) throw fail('The post\'s muscle counts are not valid.');
+      return [m[0], Math.round(m[1] * 2) / 2];
+    }),
+  };
+}
+function cleanPost(op) {
+  if (!ID.test(String(op.id))) throw fail('A post id is not valid.');
+  if (!isDate(op.date)) throw fail('"' + op.date + '" is not a yyyy-mm-dd date.');
+  const rpe = op.rpe === '' || op.rpe == null ? '' : op.rpe;
+  if (rpe !== '' && !whole(rpe, 1, 10)) throw fail('Effort must be a whole number from 1 to 10.');
+  return { id: op.id, date: op.date, workout: label(op.workout, 'Workout name', MAX.name), caption: label(op.caption == null ? '' : op.caption, 'Caption', MAX.caption),
+    rpe: rpe, notes_on: op.notes_on === true, stats: cleanStats(op.stats) };
+}
+function postFromSheet(r) {
+  try {
+    const p = { id: str(r[0]), profile: str(r[1]), date: str(r[2]), workout: str(r[3]), created: str(r[4]), caption: str(r[5]),
+      rpe: str(r[6]) === '' ? '' : num(r[6]), notes_on: r[7] === true || key(r[7]) === 'true', stats: cleanStats(JSON.parse(str(r[8]))) };
+    return p.id && p.profile && isDate(p.date) && (p.rpe === '' || whole(p.rpe, 1, 10)) ? p : null;
+  } catch (err) {
+    return null;
+  }
+}
+
 /** A sheet row as the client's row, or null when it is not usable (blank line, half-typed row). */
 function liftFromSheet(r) {
   try {
@@ -389,10 +431,52 @@ function sync(req) {
       if (!isDate(op.date)) throw fail('"' + op.date + '" is not a yyyy-mm-dd date.');
       removeRows('Lifts', r => mine(r) && str(r[1]) === op.date);
       removeRows('Body_Weight', r => mine(r) && str(r[1]) === op.date);
+      if (hasTab('Posts')) {
+        const gone = readRows('Posts').filter(r => key(r[1]) === me && str(r[2]) === op.date).map(r => str(r[0]));
+        removeRows('Posts', r => gone.indexOf(str(r[0])) >= 0);
+        dropReplies(gone);
+      }
       lifts = lifts.filter(r => r[0] !== op.date);
       bw = bw.filter(r => r[0] !== op.date);
       seen.lifts = new Set(lifts.map(r => JSON.stringify(r)));
       seen.bw = new Set(bw.map(r => JSON.stringify(r)));
+    },
+    // Feed. One post per profile, date and workout: posting again replaces it and keeps its date, reactions and comments
+    // (a page that had not loaded the Feed may send a new id for it; the reactions and comments move to that id).
+    post: op => {
+      const p = cleanPost(op), rows = readRows('Posts'), same = r => str(r[0]) === p.id, was = rows.filter(same)[0];
+      if (was && key(was[1]) !== me) throw fail('That post belongs to someone else.');
+      if (!lifts.some(r => r[0] === p.date && r[1] === p.workout)) throw fail('Nothing is logged for "' + p.workout + '" on ' + p.date + ', so there is nothing to share.');
+      const older = r => key(r[1]) === me && str(r[2]) === p.date && str(r[3]) === p.workout && !same(r), prior = rows.filter(older);
+      prior.forEach(r => { relink('Reactions', 0, str(r[0]), p.id); relink('Comments', 1, str(r[0]), p.id); });
+      const first = was || prior[0];
+      removeRows('Posts', r => same(r) || older(r));
+      appendRows('Posts', [[p.id, profile.name, p.date, p.workout, first ? str(first[4]) : new Date().toISOString(), p.caption, p.rpe, p.notes_on, JSON.stringify(p.stats)]]);
+    },
+    delPost: op => {
+      const id = String(op.id);
+      if (removeRows('Posts', r => str(r[0]) === id && key(r[1]) === me)) dropReplies([id]);
+    },
+    react: op => {
+      const id = String(op.id);
+      if (!readRows('Posts').some(r => str(r[0]) === id)) throw fail('That post has been deleted.');
+      removeRows('Reactions', r => str(r[0]) === id && key(r[1]) === me);
+      if (op.on === true) appendRows('Reactions', [[id, profile.name, new Date().toISOString()]]);
+    },
+    comment: op => {
+      const id = String(op.id), post = String(op.post), text = label(op.text, 'Comment', MAX.comment, true);
+      if (!ID.test(id)) throw fail('A comment id is not valid.');
+      if (!readRows('Posts').some(r => str(r[0]) === post)) throw fail('That post has been deleted, so the comment was not added.');
+      if (readRows('Comments').some(r => str(r[0]) === id)) return; // already added by an earlier try
+      appendRows('Comments', [[id, post, profile.name, new Date().toISOString(), text]]);
+    },
+    delComment: op => {
+      // Your own comment, or any comment on your own post.
+      const id = String(op.id), c = readRows('Comments').filter(r => str(r[0]) === id)[0];
+      if (!c) return;
+      const onMine = readRows('Posts').some(r => str(r[0]) === str(c[1]) && key(r[1]) === me);
+      if (key(c[2]) !== me && !onMine) throw fail('Only its author or the post\'s author can delete a comment.');
+      removeRows('Comments', r => str(r[0]) === id);
     },
   };
 
@@ -421,12 +505,79 @@ function sync(req) {
     w.items = w.items.sort((a, b) => (a.pos || 0) - (b.pos || 0)).map(r => ({ ex: r.ex, sets: r.sets, tech: r.tech }));
   });
 
+  // How many posts by others are newer than the last one this device has seen on the Feed tab (for the tab's badge).
+  const since = String(req.seen || '').slice(0, 40);
+  const fresh = hasTab('Posts') ? readRows('Posts').filter(r => str(r[0]) && key(r[1]) !== me && str(r[4]) > since).length : 0;
+
   return {
     profile: profile.name,
+    fresh: fresh,
     exercises: readRows('Exercises').map(r => exerciseFromSheet(r, me)).filter(Boolean),
     workouts: workouts,
     lifts: lifts.sort(byDate),
     bw: bw.sort(byDate),
     rejected: rejected,
+  };
+}
+
+/** Points the rows of a tab whose column `col` (0-based) holds post id `from` at post id `to`. */
+function relink(name, col, from, to) {
+  const sh = tab(name);
+  readRows(name).forEach((r, i) => { if (str(r[col]) === from) sh.getRange(i + 2, col + 1, 1, 1).setValues([[to]]); });
+}
+
+/** Removes the reactions and comments of these post ids. */
+function dropReplies(ids) {
+  if (!ids.length) return;
+  removeRows('Reactions', r => ids.indexOf(str(r[0])) >= 0);
+  removeRows('Comments', r => ids.indexOf(str(r[1])) >= 0);
+}
+
+// ---------- Feed: everyone's shared sessions, read when the Feed tab is opened ----------
+
+/**
+ * Newest posts first, MAX.feed at a time (req.before = the `created` of the last one already shown), each with its reactions,
+ * comments and the sets logged for it. Set notes are left out unless the post includes them. Body weight is never sent.
+ * req.week = the page's Monday (yyyy-mm-dd), for the "this week" summary.
+ */
+function feed(req) {
+  whoIs(req.token);
+  const before = String(req.before || '').slice(0, 40);
+  const all = readRows('Posts').map(postFromSheet).filter(p => p && (!before || p.created < before))
+    .sort((a, b) => (a.created < b.created ? 1 : a.created > b.created ? -1 : 0));
+  const page = all.slice(0, MAX.feed), byId = {}, byDay = {};
+  page.forEach(p => {
+    p.reactions = [];
+    p.comments = [];
+    p.sets = [];
+    byId[p.id] = p;
+    byDay[JSON.stringify([key(p.profile), p.date, p.workout])] = p;
+  });
+  readRows('Reactions').forEach(r => { const p = byId[str(r[0])]; if (p && str(r[1])) p.reactions.push(str(r[1])); });
+  readRows('Comments').forEach(r => {
+    const p = byId[str(r[1])];
+    if (p && str(r[0]) && str(r[4])) p.comments.push({ id: str(r[0]), profile: str(r[2]), created: str(r[3]), text: str(r[4]) });
+  });
+  page.forEach(p => p.comments.sort((a, b) => (a.created < b.created ? -1 : a.created > b.created ? 1 : 0)));
+
+  const week = isDate(req.week) ? req.week : '', trained = {}, days = {};
+  readRows('Lifts').forEach(r => {
+    const who = key(r[0]), date = str(r[1]), p = byDay[JSON.stringify([who, date, str(r[2])])];
+    if (p) {
+      const row = liftFromSheet(r);
+      if (row) {
+        if (!p.notes_on) row[6] = '';
+        p.sets.push(row);
+      }
+    }
+    if (week && who && date >= week) {
+      trained[who] = true;
+      days[who + '|' + date] = true;
+    }
+  });
+  return {
+    posts: page,
+    more: all.length > page.length,
+    week: week ? { trained: Object.keys(trained).length, sessions: Object.keys(days).length, people: readRows('Profiles').filter(r => str(r[0])).length } : null,
   };
 }
