@@ -65,11 +65,14 @@
   .lab { font-weight: 600; font-size: 14px; }
   .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
   /* Train */
-  /* Weight, reps and note boxes are each wide enough for 4 characters */
-  .sets { display: grid; grid-template-columns: 24px repeat(3, calc(4.5ch + 14px)) 44px; gap: 6px 8px; align-items: center; }
+  /* Weight and reps fit 4 characters each; the note takes the rest of the row */
+  .sets { display: grid; grid-template-columns: 24px repeat(2, calc(4.5ch + 14px)) minmax(0, 1fr) 44px; gap: 6px 8px; align-items: center; }
   .sets > span { font-size: 14px; color: var(--mute); font-variant-numeric: tabular-nums; }
   .sets > input { padding: 8px 6px; }
-  .sets > .was { grid-column: 2 / -1; overflow-wrap: anywhere; }
+  /* The note opens in the sheet; the box shows today's note, or last session's in grey */
+  .notebox { min-width: 0; padding: 8px 6px; border-radius: 10px; text-align: left; font-weight: 400; font-size: 16px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .notebox.was { color: var(--mute); font-style: italic; }
   .target b { color: var(--accent); }
   /* Intensity-technique sub-sets: one row each, a step further in per level */
   .sub { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
@@ -1623,14 +1626,12 @@ function exerciseCard(it, i, hist) {
       placeholder: prev ? String(key === 'w' ? prev.weight : prev.reps) : '', 'aria-label': `${it.ex} set ${j + 1} ${label}`,
       oninput: ev => { s[key] = ev.target.value; saveDraft(); },
     });
-    // Last session's note shows as its first 4 characters; focusing the box shows all of it underneath.
-    const was = prev && prev.notes, full = h('p', { class: 'hint was', hidden: true }, `Last note: ${was}`);
-    const note = h('input', { id: `t${i}n${j}`, type: 'text', autocomplete: 'off', maxLength: 500, value: s.n || '', placeholder: was ? was.slice(0, 4) : '',
-      title: was || '', 'aria-label': `${it.ex} set ${j + 1} note${was ? ` (last time: ${was})` : ''}`,
-      oninput: ev => { s.n = ev.target.value; saveDraft(); }, onfocus: () => { full.hidden = !was; }, onblur: () => { full.hidden = true; } });
-    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'), note,
+    const was = prev ? prev.notes : '';
+    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'),
+      h('button', { type: 'button', id: `t${i}n${j}`, class: s.n ? 'notebox' : 'notebox was', onclick: () => noteSheet(s, what, was),
+        'aria-label': `${what} note: ${s.n || (was ? `none yet; last time "${was}"` : 'none')}` }, s.n || was || ''),
       h('button', { type: 'button', class: 'mini', 'aria-label': `Add a technique to ${what}`, disabled: kids.length >= 9,
-        onclick: () => addTech(kids, what, again(() => {})) }, '+'), full,
+        onclick: () => addTech(kids, what, again(() => {})) }, '+'),
       ...techRows(kids, 1, what, again(() => {}), fields));
   });
   return h('article', { class: 'card' },
@@ -1642,13 +1643,31 @@ function exerciseCard(it, i, hist) {
     hist
       ? h('p', { class: 'target' }, `Best ${hist.pr.weight} × ${hist.pr.reps} (${hist.pr.date}) · Target `, h('b', {}, `${hist.pr.weight} × ${hist.pr.reps + 1}`))
       : h('p', { class: 'hint' }, 'No history yet. Your first session sets the target.'),
-    hist && h('p', { class: 'hint' }, `Grey = what you did last session (${hist.last.date}). Tap a grey note to read all of it.`),
+    hist && h('p', { class: 'hint' }, `Grey = what you did last session (${hist.last.date}). Tap a note to read or change it.`),
     grid,
     h('div', { class: 'step' },
       h('button', { type: 'button', 'aria-label': `One set fewer of ${it.ex}`, disabled: it.sets.length <= 1, onclick: again(() => it.sets.pop()) }, '−'),
       h('output', {}, `${it.sets.length} set${it.sets.length > 1 ? 's' : ''}`),
       h('button', { type: 'button', 'aria-label': `One more set of ${it.ex}`, disabled: it.sets.length >= MAX_SETS, onclick: again(() => it.sets.push({ w: '', r: '', kids: [] })) }, '+'),
       h('span', { class: 'hint' }, 'today only')));
+}
+
+/** A set's note in the sheet: last session's note in full above, today's note to type below. */
+function noteSheet(s, what, was) {
+  const area = h('textarea', { rows: 5, maxLength: 500, value: s.n || '', placeholder: 'Note for this set', 'aria-label': `${what} note` });
+  openSheet(`${what} note`, [
+    was && h('p', { class: 'hint', style: 'overflow-wrap:anywhere' }, `Last time: ${was}`),
+    area,
+    h('div', { class: 'row' },
+      h('button', { type: 'button', onclick: closeSheet }, 'Cancel'),
+      h('button', { type: 'button', class: 'btn', style: 'min-height:44px', onclick: () => {
+        s.n = area.value.trim();
+        saveDraft();
+        closeSheet();
+        drawTrain();
+      } }, 'Save note')),
+  ]);
+  area.focus();
 }
 
 /** Swap for today only: same sets and sub-sets, the new exercise's own history and target. */
