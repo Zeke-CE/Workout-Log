@@ -78,6 +78,7 @@
   .step output { min-width: 58px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
   /* Lists */
   .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  #bnote { position: sticky; top: 8px; z-index: 4; }
   .bm { width: 170px; margin: 0 auto; } /* the body map is 35 × 93, so its width sets its height */
   .pick { width: 100%; text-align: left; font-weight: 500; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; }
   .picked li { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--field); }
@@ -207,11 +208,13 @@
     <ul id="bworkouts" class="list"></ul>
     <h2 id="btitle">New workout</h2>
     <label>Workout name <input id="bname" type="text" autocomplete="off"></label>
-    <div id="bpicker"></div>
     <h2>In this workout</h2>
     <ol id="bpicked" class="list picked"></ol>
     <h2>Volume this workout</h2>
     <div id="bpreview" class="card"></div>
+    <h2>Add exercises</h2>
+    <p id="bnote" class="status" role="status" aria-live="polite"></p>
+    <div id="bpicker"></div>
     <p id="bstatus" class="status" role="status" aria-live="polite"></p>
     <button id="bsave" class="btn" type="button">Save workout</button>
     <button id="bcancel" type="button" hidden>Cancel editing</button>
@@ -873,6 +876,7 @@ function picker(id, onPick, muscle) {
       fill(eq, 'All equipment', [...new Set(ALL.map(e => e.equipment))].sort(), x => x, eq.value);
       shape = ALL;
     }
+    onMap.hidden = !fine; // the map's muscles are RepDB's
     note.replaceChildren(fine ? credit() : RD.err ? `The RepDB exercise list could not load (${RD.err}). Showing the older built-in list; reload the page to try again.`
       : 'Loading the RepDB exercise list. Showing the older built-in list until it arrives.');
     const typedName = q.value.trim().replace(/\s+/g, ' '), text = typedName.toLowerCase(), mm = m.value;
@@ -890,9 +894,13 @@ function picker(id, onPick, muscle) {
       } }, text && !BY.has(text) ? `Add “${typedName}” as a new exercise` : 'Add an exercise that is not listed',
       h('span', { class: 'hint' }, 'You say which muscles it trains, and it joins the exercise database.'))));
   };
+  const onMap = h('button', { type: 'button', onclick: async () => {
+    const got = await musclePick(m.value);
+    if (got) { m.value = got; draw(); }
+  } }, 'Pick a muscle on the body map');
   [q, m, eq].forEach(x => x.addEventListener('input', draw));
   draw();
-  return Object.assign(h('div', { class: 'stack' }, q, h('div', { class: 'row' }, m, eq), note, count, list), { redraw: draw });
+  return Object.assign(h('div', { class: 'stack' }, q, h('div', { class: 'row' }, m, eq), onMap, note, count, list), { redraw: draw });
 }
 
 /**
@@ -1342,7 +1350,7 @@ const REPDB_ALIAS = {
   'wide-grip chest press machine': 'chest-press-machine',
 };
 const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-const RD = { idx: null, err: '', note: '', busy: false, chart: null, mapOk: false, mapErr: '', mapBusy: false, pick: null };
+const RD = { idx: null, err: '', note: '', busy: false, chart: null, mapOk: false, mapErr: '', mapBusy: false, pick: null, onMap: null };
 const unmapped = rows => [...new Set(rows.flatMap(r => r[3].concat(r[4])))].filter(m => !XWALK[m]).sort();
 
 /** RepDB file → rows of [id, name, equipment, primary muscles, secondary muscles]. Missing muscle lists count as none and are logged. */
@@ -1431,7 +1439,7 @@ function loadMap() {
     if (bad.length) throw new Error(`Muscle map regions that do not exist: ${bad.join(', ')}.`);
     RD.mapOk = true;
   }).catch(err => { RD.mapErr = msgOf(err); console.error('Muscle map:', err); })
-    .finally(() => { RD.mapBusy = false; if (!$('vTrends').hidden && !MAP.hidden) drawMap(); });
+    .finally(() => { RD.mapBusy = false; if (!$('vTrends').hidden && !MAP.hidden) drawMap(); if (RD.onMap) RD.onMap(); });
 }
 
 /** Weekly fractional sets per RepDB muscle: 1 per set where it is primary, ½ where secondary (Pelland et al. 2024). Straight sets only. */
@@ -1496,6 +1504,53 @@ function drawMap() {
     h('span', {}, XWALK[m][2] ? `${XWALK[m][1]} · approx.: ${XWALK[m][2]}` : XWALK[m][1]))));
   say('mapStatus', [RD.note, !shown.length && 'No matched sets this week.',
     w.unmatched.length && `Left off the map because no RepDB exercise matches the name (this range): ${w.unmatched.join(', ')}.`].filter(Boolean).join(' '));
+}
+
+/**
+ * Body map in the sheet for choosing a muscle to filter exercises by. Resolves with an XWALK muscle, or '' if closed.
+ * When it covers another sheet (the Train tab's exercise picker), that sheet comes back afterwards.
+ */
+function musclePick(current) {
+  const back = $('sheet').hidden ? null : [$('sheetTitle').textContent, [...$('sheetBody').childNodes], sheetCancel];
+  return new Promise(done => {
+    let side = 'FRONT', chart = null, r = current ? XWALK[current][0][0] : '';
+    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Body side' }), body = h('div', { class: 'bm' });
+    const status = h('p', { class: 'status', role: 'status' }), choices = h('div', { class: 'stack' });
+    const at = id => Object.keys(XWALK).filter(m => XWALK[m][0].includes(id));
+    const end = got => { RD.onMap = null; if (back) openSheet(...back); done(got); };
+    const choose = got => { closeSheet(); end(got); };
+    const draw = () => {
+      const err = RD.mapErr, ready = RD.mapOk && !err;
+      [seg, body].forEach(x => { x.hidden = !ready; });
+      status.textContent = err || (ready ? '' : 'Loading the body map…');
+      status.className = `status ${err ? 'err' : ''}`;
+      if (!ready) {
+        choices.replaceChildren(...(err ? [h('button', { type: 'button', onclick: () => { RD.mapErr = ''; draw(); } }, 'Try again')] : []));
+        return err || loadMap();
+      }
+      seg.replaceChildren(...[['Front', 'FRONT'], ['Back', 'BACK']].map(([label, v]) =>
+        h('button', { type: 'button', 'aria-pressed': String(side === v), onclick: () => { side = v; draw(); } }, label)));
+      const bodyState = {}, here = r ? at(r) : [];
+      if (r) ['-left', '-right'].forEach(x => { bodyState[r + x] = { intensity: 0, selected: true }; });
+      const opts = { view: side, bodyState, ariaLabel: 'Body map. Tap a muscle to list its exercises.',
+        onMuscleClick: id => { r = id.replace(/-(left|right)$/, ''); if (at(r).length === 1) choose(at(r)[0]); else draw(); } };
+      try {
+        if (chart) chart.update(opts); else chart = new BodyMuscles.BodyChart(body, opts);
+      } catch (e) {
+        RD.mapErr = `The body map could not be drawn: ${msgOf(e)}`;
+        console.error('Muscle map:', e);
+        return draw();
+      }
+      choices.replaceChildren(...(!r ? [h('p', { class: 'hint' }, 'Tap a muscle to list the exercises that train it.')]
+        : !here.length ? [h('p', { class: 'hint' }, 'No exercise data is drawn on that spot. Try a nearby muscle.')]
+          : [h('p', { class: 'hint' }, 'More than one muscle is drawn there. Pick one:'),
+            ...here.map(m => h('button', { type: 'button', 'aria-pressed': String(m === current), onclick: () => choose(m) },
+              XWALK[m][2] ? `${said(m)} (${XWALK[m][2]})` : said(m)))]));
+    };
+    openSheet('Find exercises by muscle', [seg, body, status, choices], () => end(''));
+    RD.onMap = draw;
+    draw();
+  });
 }
 
 // ---------- Intensity-technique sub-sets (Train and Build) ----------
@@ -1711,7 +1766,7 @@ function drawPicked() {
       ...techRows(it.tech, 0, `the last set of ${it.ex}`, drawPicked),
       h('button', { type: 'button', disabled: it.tech.length >= 9, onclick: () => addTech(it.tech, `the last set of ${it.ex}`, drawPicked) }, 'Add a technique to the last set'));
   }));
-  if (!B.items.length) $('bpicked').append(h('li', { class: 'hint', style: 'border:0;padding:0;background:none' }, 'Tap exercises above to add them.'));
+  if (!B.items.length) $('bpicked').append(h('li', { class: 'hint', style: 'border:0;padding:0;background:none' }, 'Tap exercises below to add them.'));
   const fine = !!RD.idx, { tot, unknown } = volume(B.items, fine);
   const rows = Object.keys(tot).map(m => ({ m, ...tot[m] })).sort((a, b) => b.p + b.s - a.p - a.s || a.m.localeCompare(b.m));
   const max = Math.max(SESSION_REF, ...rows.map(r => r.p + r.s + r.t));
@@ -1738,6 +1793,7 @@ function edit(i) {
   B.items = S.workouts[i].items.map(x => ({ ...x, tech: plan(x.tech) }));
   $('bname').value = S.workouts[i].name;
   say('bstatus', '');
+  say('bnote', '');
   drawBuild();
   $('btitle').scrollIntoView({ block: 'start' });
 }
@@ -1745,6 +1801,7 @@ function resetBuild() {
   B.editing = null;
   B.items = [];
   $('bname').value = '';
+  say('bnote', '');
   drawBuild();
 }
 
@@ -2088,7 +2145,13 @@ $('mapX').addEventListener('click', () => setDash(getDash().filter(x => x !== 'm
 $('addPlot').addEventListener('click', () => plotBuilder(-1));
 $('mapPrev').addEventListener('click', () => { view.back = Math.min(view.weeks - 1, view.back + 1); drawTrends(); });
 $('mapNext').addEventListener('click', () => { view.back = Math.max(0, view.back - 1); drawTrends(); });
-const buildPicker = picker('b',e => { B.items.push({ ex: e.name, sets: 3, tech: [] }); drawPicked(); });
+const buildPicker = picker('b', e => {
+  const dup = B.items.some(x => same(x.ex, e.name));
+  B.items.push({ ex: e.name, sets: 3, tech: [] });
+  drawPicked();
+  say('bnote', dup ? `${e.name} was already in this workout, so it is in it twice now. Tap ✕ on one above if you meant to add it once.`
+    : `Added ${e.name} (3 sets) as exercise ${B.items.length}. It is listed above under In this workout.`, dup ? 'err' : 'ok');
+});
 $('bpicker').append(buildPicker);
 window.addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
