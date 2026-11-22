@@ -452,10 +452,13 @@ function groupFine({ primary, secondary }) {
   return [p, spread(secondary).filter(m => !p.includes(m))];
 }
 
+const fineFor = name => { const r = RD.idx && (RD.idx.byId[REPDB_ALIAS[name.toLowerCase()]] || RD.idx.byNorm[norm(name)]); return r ? r.fine : null; };
+/** A built-in name can't be added as your own exercise, unless RepDB has loaded and has no match for it (then it can't be searched). */
+const locked = name => BUILTIN.has(name.toLowerCase()) && (!RD.idx || !!fineFor(name));
+
 function reindex() {
   const rep = RD.idx, lc = e => e.name.toLowerCase();
-  const fineFor = name => { const r = rep && (rep.byId[REPDB_ALIAS[name.toLowerCase()]] || rep.byNorm[norm(name)]); return r ? r.fine : null; };
-  const mine = S.exercises.filter(e => !BUILTIN.has(lc(e))).map(e => ({ ...e, custom: true, fine: e.fine || fineFor(e.name) || groupFine(e) })), taken = new Set(mine.map(lc));
+  const mine = S.exercises.filter(e => !locked(e.name)).map(e => ({ ...e, custom: true, fine: e.fine || fineFor(e.name) || groupFine(e) })), taken = new Set(mine.map(lc));
   ALL = mine.concat(rep ? rep.list.filter(e => !taken.has(lc(e))) : BANK);
   BY = new Map(BANK.map(e => [lc(e), { ...e, fine: fineFor(e.name) }]).concat(ALL.map(e => [lc(e), e])));
 }
@@ -938,7 +941,7 @@ function exerciseForm({ name = '', primary = [], secondary = [], fine, equipment
       if (!title) return stop('Enter the exercise name.');
       if (FORMULA_START.test(title)) return stop('The name can\'t start with = + - or @.');
       const known = BY.get(title.toLowerCase());
-      if (known && !known.custom) return stop(`“${title}” is already in the exercise list. Search for it instead.`);
+      if (known && !known.custom && (known.fine || !RD.idx)) return stop(`“${title}” is already in the exercise list. Search for it instead.`);
       if (had && !had.mine) return stop(`“${title}” was already added by someone else, so it can't be changed from this profile.`);
       if (!pri.length) return stop('Tap at least one muscle once to mark it primary.');
       try {
@@ -1336,6 +1339,7 @@ const REPDB_ALIAS = {
   'cable bar overhead triceps extension': 'cable-overhead-tricep-extension',
   'cable hammer curls - rope attachment': 'cable-hammer-curl',
   'chest supported t-bar row': 'chest-supported-machine-row', // nearest: no chest-supported T-bar row
+  'flat bench lying leg raise': 'lying-leg-raise',
   'leg extensions': 'leg-extension',
   'leverage high row': 'chest-supported-machine-row', // nearest: no high row
   'leverage shrug': 'plate-loaded-shrug',
@@ -1986,7 +1990,7 @@ function importExercises(rows) {
   rows.forEach(({ r, line }) => {
     const [name = '', pri = '', sec = '', equip = '', mech = '', priFine = '', secFine = ''] = r, bad = why => errors.push(`line ${line}: ${why}`);
     const had = S.exercises.find(e => same(e.name, name));
-    if (!name || BUILTIN.has(name.toLowerCase()) || (had && !had.mine)) return skipped++;
+    if (!name || locked(name) || (had && !had.mine)) return skipped++;
     const primary = split(pri), secondary = split(sec).filter(m => !primary.includes(m)), equipment = equip.toLowerCase() || 'none listed';
     const pf = split(priFine), sf = split(secFine).filter(m => !pf.includes(m)); // the exact muscles; blank in a file exported before they existed
     const odd = primary.concat(secondary).filter(m => !MUSCLES.includes(m)).concat(pf.concat(sf).filter(m => !Object.hasOwn(XWALK, m)));
