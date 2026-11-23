@@ -65,8 +65,20 @@
   .lab { font-weight: 600; font-size: 14px; }
   .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
   /* Train */
-  /* Weight and reps fit 4 characters each; the note takes the rest of the row */
-  .sets { display: grid; grid-template-columns: 24px repeat(2, calc(4.5ch + 14px)) minmax(0, 1fr) 44px; gap: 6px 8px; align-items: center; }
+  /* Weight and reps fit 4 characters each, RIR a range plus its "from max" line; the note takes the rest of the row */
+  .sets { display: grid; grid-template-columns: 24px repeat(2, calc(4.5ch + 14px)) 66px minmax(0, 1fr) 44px; gap: 6px 8px; align-items: center; }
+  /* RIR: today's rating (or last session's in grey), and under it how far the set was from your fresh max at that weight */
+  .rirbox { min-width: 0; min-height: 44px; padding: 4px; border-radius: 10px; font-weight: 400; font-size: 16px; line-height: 1.15;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .rirbox small { font-size: 11px; color: var(--mute); white-space: nowrap; }
+  .rirbox.was > span { color: var(--mute); font-style: italic; }
+  .rirpick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .rirpick button { min-height: 44px; padding: 0; font-variant-numeric: tabular-nums; }
+  .rirpick button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .rirpick button.in { border-color: var(--accent); }
+  .ririnfo dt { font-weight: 600; margin-top: 6px; }
+  .ririnfo dd { margin: 0 0 0 1.5em; }
+  .ririnfo p, .ririnfo dl, .ririnfo ul { margin: 0; }
   .sets > span { font-size: 14px; color: var(--mute); font-variant-numeric: tabular-nums; }
   .sets > input { padding: 8px 6px; }
   /* The note opens in the sheet; the box shows today's note, or last session's in grey */
@@ -255,7 +267,7 @@
       <button id="hpast" type="button">Log a past workout</button>
       <label>Or import spreadsheet tabs saved as CSV (pick several at once) <input id="imp" type="file" accept=".csv,text/csv" multiple></label>
       <p id="dstatus" class="status" role="status" aria-live="polite"></p>
-      <p class="hint">In Google Sheets: File → Download → Comma-separated values, once per tab. Lifts (date, workout, exercise, set, reps, weight_lb, notes, with or without sub, technique, rest_s, rom), Body_Weight (date, body_weight_lb), Exercises (Exercise, Primary, Secondary, Equipment, Mechanic) and Workouts (one column per workout) are all understood.</p>
+      <p class="hint">In Google Sheets: File → Download → Comma-separated values, once per tab. Lifts (date, workout, exercise, set, reps, weight_lb, notes, with or without sub, technique, rest_s, rom, rir), Body_Weight (date, body_weight_lb), Exercises (Exercise, Primary, Secondary, Equipment, Mechanic) and Workouts (one column per workout) are all understood.</p>
     </div>
     <div id="hunknown" class="stack"></div>
     <h2>Logged days</h2>
@@ -274,7 +286,7 @@
       </div>
       <button id="expEx" type="button">Export exercises.csv (the ones added here)</button>
       <p id="estatus" class="status" role="status" aria-live="polite"></p>
-      <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes. Technique sub-sets are rows too, with <code>technique</code> filled in: <code>sub</code> is the place under the set (2.1 = first one nested under the second), <code>rest_s</code> the myo-rep rest, <code>rom</code> the share of the range for partials.</p>
+      <p class="hint">pandas: <code>pd.read_csv("lifts.csv", parse_dates=["date"])</code>. One row per set: date, workout, exercise, set, reps, weight, notes. Technique sub-sets are rows too, with <code>technique</code> filled in: <code>sub</code> is the place under the set (2.1 = first one nested under the second), <code>rest_s</code> the myo-rep rest, <code>rom</code> the share of the range for partials. <code>rir</code> is the reps in reserve you picked: F (failure), 0 to 10, or a range such as 1-2; blank when none was picked.</p>
     </div>
   </section>
 
@@ -345,6 +357,14 @@ const LIFT_COLS = ['date', 'workout', 'exercise', 'set', 'reps', 'weight', 'note
 // A lifts row for an intensity-technique sub-set carries 4 more values. sub = its place under the set: '2' is the second
 // sub-set, '2.1' the first one nested under that. A straight set stays 7 values long.
 const TECH_COLS = ['sub', 'technique', 'rest_s', 'rom'], SUB = /^[1-9](\.[1-9]){0,2}$/;
+// Reps in reserve, when one was picked: a 12th value after the 4 technique ones (blank on a straight set). 'F' = failed rep,
+// '2' = 2 in reserve, '1-2' = a range, lower first. A set without one stays 7 (or 11) long. Code.gs keeps the same shape (cleanLift).
+const RIR_COL = 'rir', RIRS = ['F', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+const RIR_RE = /^(F|10|[0-9])(-(10|[0-9]))?$/;
+const okRir = v => { const m = RIR_RE.exec(v); return !!m && (!m[3] || RIRS.indexOf(m[1]) < RIRS.indexOf(m[3])); };
+const rirText = v => (v ? String(v).replace('-', '–') : '');
+/** A lift row in its one canonical shape: 7 values, 11 with a technique, 12 with reps in reserve. */
+const liftRow = (base, tech, rir) => (rir ? base.concat(tech || ['', '', '', ''], [rir]) : tech ? base.concat(tech) : base);
 // technique: [tag, name, how to do it]. Sources are listed under "Where the numbers come from".
 const TECH = {
   partial: ['Partial', 'Partial reps', 'At failure, keep going through part of the range, in the stretched part of the lift. Same weight.'],
@@ -486,7 +506,7 @@ function clearExamples() {
 }
 
 const newDraft = () => ({ date: today(), workout: '', oneOff: false, body: '', items: [] });
-const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(s => s.n || used(s)));
+const typed = d => !!d.body || d.items.some(it => it.notes || it.sets.some(s => s.n || s.rir || used(s)));
 function saveDraft() {
   $('tshare').hidden = true; // the offer to share is for the session just saved, until the next one is started
   if (!canStore) return;
@@ -603,21 +623,46 @@ function addExamples() {
 
 /**
  * Per exercise (lowercased name): pr = heaviest weight (lowest for "Assisted" lifts), most reps at that weight,
- * latest date with both; last = the sets of the most recent session. Technique sub-sets are left out. Returns a lookup function.
+ * latest date with both; last = the sets of the most recent session; fresh = every first set (the one done fresh), for
+ * freshGap. Technique sub-sets are left out. Returns a lookup function.
  */
 function stats() {
-  const best = {}, last = {};
-  S.lifts.forEach(([date, , exercise, set, reps, weight, notes, , tech]) => {
+  const best = {}, last = {}, fresh = {};
+  S.lifts.forEach(([date, , exercise, set, reps, weight, notes, , tech, , , rir]) => {
     const k = exercise.trim().toLowerCase();
     if (tech) return;
+    if (set === 1) (fresh[k] || (fresh[k] = [])).push({ weight, reps, date });
     if (!last[k] || date > last[k].date) last[k] = { date, sets: [] };
-    if (last[k].date === date) last[k].sets[set - 1] = { weight, reps, notes: String(notes || '') };
+    if (last[k].date === date) last[k].sets[set - 1] = { weight, reps, notes: String(notes || ''), rir: rir || '' };
     const b = best[k];
     const heavier = b && (k.includes('assisted') ? weight < b.weight : weight > b.weight);
     const sameWeightBetter = b && weight === b.weight && (reps > b.reps || (reps === b.reps && date >= b.date));
     if (!b || heavier || sameWeightBetter) best[k] = { weight, reps, date };
   });
-  return name => { const k = name.trim().toLowerCase(); return best[k] ? { pr: best[k], last: last[k] } : null; };
+  return name => { const k = name.trim().toLowerCase(); return best[k] ? { pr: best[k], last: last[k], fresh: fresh[k] || [] } : null; };
+}
+
+/** Epley's one-rep-max estimate, and its inverse: the most whole reps that estimate allows at a weight. */
+const e1rm = (w, reps) => w * (1 + reps / 30);
+const repsAt = (max, w) => Math.max(0, Math.floor(30 * (max / w - 1) + 1e-9));
+
+/**
+ * How far a set's reps fell short of the most reps you have done at that weight as a first set (fresh). `fresh` = first
+ * sets from history, plus today's first set when this is a later set. With no first set at that exact weight, the best
+ * first set's Epley 1RM (sets of 12 reps or fewer when there are any) gives an estimate. Assisted and body-weight-only
+ * lifts are only compared at an exact weight. Returns null when nothing compares.
+ * { max, gap, est: { from: { weight, reps, date }, orm } | null, ref: { weight, reps, date } }
+ */
+function freshGap(fresh, weight, reps, exercise) {
+  if (typeof weight !== 'number' || typeof reps !== 'number' || reps < 1 || !fresh.length) return null;
+  const exact = fresh.filter(f => f.weight === weight).sort((a, b) => b.reps - a.reps || (a.date < b.date ? 1 : -1))[0];
+  if (exact) return { max: exact.reps, gap: exact.reps - reps, est: null, ref: exact };
+  if (weight <= 0 || /assisted/i.test(exercise)) return null;
+  const heavy = fresh.filter(f => f.weight > 0 && f.reps <= 12), pool = heavy.length ? heavy : fresh.filter(f => f.weight > 0);
+  if (!pool.length) return null;
+  const from = pool.reduce((b, f) => (e1rm(f.weight, f.reps) > e1rm(b.weight, b.reps) ? f : b)), orm = e1rm(from.weight, from.reps);
+  const max = repsAt(orm, weight);
+  return { max, gap: max - reps, est: { from, orm }, ref: from };
 }
 
 /**
@@ -1677,7 +1722,7 @@ function drawTrain() {
 function exerciseCard(it, i, hist) {
   const e = BY.get(it.ex.toLowerCase());
   const again = fn => () => { fn(); saveDraft(); drawTrain(); };
-  const grid = h('div', { class: 'sets' }, h('span', {}), h('span', {}, 'Weight'), h('span', {}, 'Reps'), h('span', {}, 'Note'), h('span', {}));
+  const grid = h('div', { class: 'sets' }, h('span', {}), h('span', {}, 'Weight'), h('span', {}, 'Reps'), h('span', {}, 'RIR'), h('span', {}, 'Note'), h('span', {}));
   const fields = (n, name) => {
     const box = (key, hint, mode) => h('input', { type: 'text', inputMode: mode, autocomplete: 'off', value: n[key] || '', placeholder: hint,
       'aria-label': `${name} ${hint}`, oninput: ev => { n[key] = ev.target.value; saveDraft(); } });
@@ -1687,13 +1732,23 @@ function exerciseCard(it, i, hist) {
   };
   it.sets.forEach((s, j) => {
     const prev = hist && hist.last.sets[j], kids = s.kids || (s.kids = []), what = `${it.ex} set ${j + 1}`;
+    const rirBox = h('button', { type: 'button', id: `t${i}q${j}`, class: 'rirbox', onclick: () => rirSheet(s, what, prev ? prev.rir : '', () => compare(it, j, hist)) });
+    const paint = () => {
+      const cmp = compare(it, j, hist), was = prev ? prev.rir : '', shown = s.rir || was;
+      rirBox.className = s.rir || !was ? 'rirbox' : 'rirbox was';
+      rirBox.replaceChildren(h('span', {}, rirText(shown)), ...(cmp ? [h('small', {}, gapLine(cmp))] : []));
+      rirBox.setAttribute('aria-label', `${what} reps in reserve: ${s.rir ? rirText(s.rir) : was ? `none yet; last time ${rirText(was)}` : 'none'}` +
+        (cmp ? `. ${gapLine(cmp, true)}` : ''));
+    };
+    paint();
     const cell = (key, label, mode) => h('input', {
       id: `t${i}${key}${j}`, type: 'text', inputMode: mode, autocomplete: 'off', value: s[key],
       placeholder: prev ? String(key === 'w' ? prev.weight : prev.reps) : '', 'aria-label': `${it.ex} set ${j + 1} ${label}`,
-      oninput: ev => { s[key] = ev.target.value; saveDraft(); },
+      oninput: ev => { s[key] = ev.target.value; saveDraft(); paint(); if (j === 0) grid.dispatchEvent(new Event('first')); },
     });
+    grid.addEventListener('first', () => { if (j) paint(); }); // today's first set is the fresh max the later sets compare with
     const was = prev ? prev.notes : '';
-    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'),
+    grid.append(h('span', {}, String(j + 1)), cell('w', 'weight', 'decimal'), cell('r', 'reps', 'numeric'), rirBox,
       h('button', { type: 'button', id: `t${i}n${j}`, class: s.n ? 'notebox' : 'notebox was', onclick: () => noteSheet(s, what, was),
         'aria-label': `${what} note: ${s.n || (was ? `none yet; last time "${was}"` : 'none')}` }, s.n || was || ''),
       h('button', { type: 'button', class: 'mini', 'aria-label': `Add a technique to ${what}`, disabled: kids.length >= 9,
@@ -1709,13 +1764,124 @@ function exerciseCard(it, i, hist) {
     hist
       ? h('p', { class: 'target' }, `Best ${hist.pr.weight} × ${hist.pr.reps} (${hist.pr.date}) · Target `, h('b', {}, `${hist.pr.weight} × ${hist.pr.reps + 1}`))
       : h('p', { class: 'hint' }, 'No history yet. Your first session sets the target.'),
-    hist && h('p', { class: 'hint' }, `Grey = what you did last session (${hist.last.date}). Tap a note to read or change it.`),
+    hist && h('p', { class: 'hint' }, `Grey = what you did last session (${hist.last.date}). Tap RIR or a note to set or change it.`),
     grid,
     h('div', { class: 'step' },
       h('button', { type: 'button', 'aria-label': `One set fewer of ${it.ex}`, disabled: it.sets.length <= 1, onclick: again(() => it.sets.pop()) }, '−'),
       h('output', {}, `${it.sets.length} set${it.sets.length > 1 ? 's' : ''}`),
       h('button', { type: 'button', 'aria-label': `One more set of ${it.ex}`, disabled: it.sets.length >= MAX_SETS, onclick: again(() => it.sets.push({ w: '', r: '', kids: [] })) }, '+'),
       h('span', { class: 'hint' }, 'today only')));
+}
+
+/** freshGap for set j of a Train card, from what is typed now. Today's first set counts as a fresh set for the later ones. */
+function compare(it, j, hist) {
+  const s = it.sets[j], first = it.sets[0], fresh = hist ? hist.fresh.slice() : [];
+  const fw = toNum(first.w), fr = toNum(first.r);
+  if (j > 0 && typeof fw === 'number' && Number.isInteger(fr) && fr > 0) fresh.push({ weight: fw, reps: fr, date: D.date, today: true });
+  const reps = toNum(s.r);
+  return Number.isInteger(reps) ? freshGap(fresh, toNum(s.w), reps, it.ex) : null;
+}
+
+/** The RIR box's second line ("3 from max"), or with `long` a sentence for screen readers. ≈ = estimated with Epley. */
+function gapLine(c, long) {
+  const about = c.est ? '≈' : '';
+  if (long) {
+    const how = c.est ? 'an estimated ' : '';
+    return c.gap > 0 ? `${c.gap} reps from ${how}fresh max of ${c.max}` : c.gap === 0 ? `matched ${how}fresh max of ${c.max}` : `${-c.gap} past ${how}fresh max of ${c.max}`;
+  }
+  return c.gap > 0 ? `${about}${c.gap} from max` : c.gap === 0 ? `${about}at max` : `${about}${-c.gap} past max`;
+}
+
+const dayText = f => (f.today ? 'today' : shortDate(dayNum(f.date)));
+
+/** The "how far from your fresh max" paragraph in the RIR sheet. */
+function gapPara(c, w, reps) {
+  if (!c) {
+    return h('p', { class: 'hint' }, typeof w === 'number' && Number.isInteger(reps)
+      ? 'No first set of this exercise to compare with yet. Once you log one, this shows how far each set is from your fresh max at its weight.'
+      : 'Enter this set\'s weight and reps to see how far it was from your best fresh set at that weight.');
+  }
+  const f = c.ref, said = c.gap > 0 ? ['This set was ', h('b', {}, `${c.gap} RIR`), ' from your']
+    : c.gap === 0 ? ['This set ', h('b', {}, 'matched'), ' your'] : ['This set ', h('b', {}, `beat (by ${-c.gap})`), ' your'];
+  return h('p', {}, ...said, c.est
+    ? ` estimated fresh max at ${w} lb. You have no first set at ${w} lb, so it is worked out from your best first set, ${f.weight} × ${f.reps} (${dayText(f)}): ` +
+      `a one-rep max of about ${Math.round(c.est.orm)} lb (Epley), which predicts ${c.max} rep${c.max === 1 ? '' : 's'} at ${w} lb. You did ${reps}.`
+    : ` fresh max at ${w} lb: ${f.reps} rep${f.reps === 1 ? '' : 's'} as a first set (${dayText(f)}). You did ${reps}.`);
+}
+
+/**
+ * The RIR picker: tap one rating, or two for a range. Last session's rating and the fresh-max comparison sit above it.
+ * `sel` carries an unsaved choice back from the explainer.
+ */
+function rirSheet(s, what, was, cmpFn, sel) {
+  let pick = sel || (s.rir ? s.rir.split('-') : []);
+  const grid = h('div', { class: 'rirpick', role: 'group', 'aria-label': 'Reps in reserve' });
+  const readout = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const draw = () => {
+    const [a, b] = pick.map(v => RIRS.indexOf(v));
+    grid.replaceChildren(...RIRS.map((v, k) => h('button', { type: 'button', 'aria-pressed': String(pick.includes(v)),
+      class: b !== undefined && k > a && k < b ? 'in' : '', 'aria-label': v === 'F' ? 'Failure' : `${v} in reserve`,
+      onclick: () => {
+        if (pick.length === 1 && pick[0] === v) pick = [];
+        else if (pick.length === 1) pick = [pick[0], v].sort((x, y) => RIRS.indexOf(x) - RIRS.indexOf(y));
+        else pick = [v];
+        draw();
+      } }, v === 'F' ? 'Fail' : v)));
+    readout.textContent = pick.length === 2 ? `Range: ${rirText(pick.join('-'))} RIR. Tap any rating to start over.`
+      : pick.length ? `${pick[0] === 'F' ? 'Failure' : `${pick[0]} RIR`}. Tap a second rating for a range.`
+        : 'Tap one rating, or two for a range.';
+  };
+  draw();
+  const w = toNum(s.w), reps = toNum(s.r);
+  openSheet(`${what} RIR`, [
+    gapPara(cmpFn(), w, reps),
+    was && h('p', { class: 'hint' }, `Last time: ${rirText(was)}${was === 'F' ? ' (failure)' : ' RIR'}`),
+    grid, readout,
+    h('button', { type: 'button', onclick: () => rirInfo(() => rirSheet(s, what, was, cmpFn, pick)) }, 'ⓘ What do these ratings mean?'),
+    h('div', { class: 'row' },
+      h('button', { type: 'button', onclick: () => { pick = []; draw(); } }, 'Clear'),
+      h('button', { type: 'button', class: 'btn', style: 'min-height:44px', onclick: () => {
+        s.rir = pick.join('-');
+        saveDraft();
+        closeSheet();
+        drawTrain();
+      } }, 'Save RIR')),
+  ]);
+}
+
+/** How the RIR scale works and what the research says about it. `back` reopens the picker. */
+function rirInfo(back) {
+  const dt = (a, b) => [h('dt', {}, a), h('dd', {}, b)];
+  openSheet('Reps in reserve (RIR)', [h('div', { class: 'stack ririnfo' },
+    h('p', {}, 'RIR is how many more good reps you could have done when you ended the set. Rate it right after the last rep, while you can still feel it.'),
+    h('dl', {},
+      ...dt('Fail', 'You tried another rep and could not finish it.'),
+      ...dt('0', 'The last rep was complete, but you could not have done another.'),
+      ...dt('1', 'You could have tried another rep and would probably have made it.'),
+      ...dt('2', 'You could definitely have done one more, and could have tried a second.'),
+      ...dt('3 to 10', 'The same pattern: the number is how many more reps you had left. Above about 5, nobody can tell 6 from 8 reliably, so treat these as "easy".')),
+    h('p', {}, h('b', {}, 'Not sure? Pick a range.'), ' Tap two ratings, such as 1 and 2, when the set could have been either.'),
+    h('h3', {}, 'How accurate is it?'),
+    h('p', {}, 'People tend to underestimate how many reps they have left, by about one rep on average. Ratings get more accurate the closer the set ends to failure, and with practice. ' +
+      'Taking a set to failure now and then shows you what 0 really feels like.'),
+    h('h3', {}, 'How close should sets get?'),
+    h('ul', {},
+      h('li', {}, 'Muscle growth goes up as sets end closer to failure, but stopping 1 or 2 reps short gives nearly the same growth as going all the way.'),
+      h('li', {}, 'Strength gains depend much less on how close to failure you go.'),
+      h('li', {}, 'Sets to failure cost more fatigue. Most working sets can end at 0 to 3 RIR; failure is safest on machines and isolation lifts.')),
+    h('h3', {}, 'The "from max" line'),
+    h('p', {}, 'Under the rating, the box shows how many reps this set fell short of your best fresh set at the same weight, meaning the most reps you have done ' +
+      'at that weight as the first set of the exercise. It measures fatigue from earlier sets as well as effort, so a set can be at 0 RIR and still 3 from max.'),
+    h('p', {}, 'With no first set at that exact weight, ≈ marks an estimate: your best first set (of 12 reps or fewer) gives a one-rep max by the Epley formula, ' +
+      'weight × (1 + reps ÷ 30), and that predicts the reps at the new weight. Estimates are rougher the further the weight is from that set, and above about 12 reps.'),
+    h('details', {}, h('summary', {}, 'Sources'), h('ul', {},
+      h('li', {}, 'Zourdos et al. (2016), J Strength Cond Res 30(1): the RIR-based effort scale (RPE 10 = 0 RIR, 9 = 1 RIR).'),
+      h('li', {}, 'Halperin et al. (2022), Sports Med 52(2): review of how well people predict reps to failure.'),
+      h('li', {}, 'Refalo et al. (2023), Sports Med 53(3): meta-analysis of training to failure and muscle growth.'),
+      h('li', {}, 'Robinson et al. (2024), Sports Med 54(9): dose-response of proximity to failure for growth and strength.'),
+      h('li', {}, 'Refalo et al. (2024), J Sports Sci 42(1): failure vs 1 to 2 RIR in trained lifters, similar growth.'),
+      h('li', {}, 'Epley (1985): the one-rep-max formula.')))),
+  h('button', { type: 'button', class: 'btn', style: 'min-height:44px', onclick: back }, 'Back to the ratings')]);
 }
 
 /** A set's note in the sheet: last session's note in full above, today's note to type below. */
@@ -1798,7 +1964,7 @@ async function saveSession() {
       const w = toNum(s.w), reps = toNum(s.r), notes = (s.n || it.notes || '').trim();
       if (!used(s)) return;
       if (bad(w, reps)) return errors.push(`${it.ex} set ${j + 1}: weight "${w}", reps "${reps}"`);
-      out.push([date, workout, it.ex, j + 1, reps, w, notes]);
+      out.push(liftRow([date, workout, it.ex, j + 1, reps, w, notes], null, okRir(s.rir || '') ? s.rir : ''));
       // Sub-sets left blank were skipped on the day. A blank weight means the weight of the row above; only a drop needs its own.
       const walk = (kids, path, above, where) => (kids || []).forEach((n, k) => {
         const own = n.t === 'drop' || n.t === 'myo' ? toNum(n.w) : '', wt = own === '' && n.t !== 'drop' ? above : own;
@@ -1979,7 +2145,8 @@ function setList(rows, notes) {
   // A set's note is shown once; a sub-set row repeats its set's note, and older rows repeat one note on every set.
   const shown = new Map();
   const note = r => { const n = notes ? String(r[6] || '').trim() : '', dup = shown.get(r[2]) === n; shown.set(r[2], n); return n && !dup ? ` (${n})` : ''; };
-  rows.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}${note(r)}`
+  const rir = r => (r[11] ? ` @ ${r[11] === 'F' ? 'failure' : `${rirText(r[11])} RIR`}` : '');
+  rows.forEach(r => (byEx.get(r[2]) || byEx.set(r[2], []).get(r[2])).push(!r[8] ? `${r[5]} × ${r[4]}${rir(r)}${note(r)}`
     : `${'↳'.repeat(r[7].split('.').length)} ${r[8]} ${r[5]} × ${r[4]}${r[10] ? ` at ${r[10] * 100}% range` : ''}${r[9] === '' ? '' : ` after ${r[9]} s`}`));
   return h('ul', {}, [...byEx].map(([ex, sets]) => h('li', {}, `${ex}: ${sets.join(', ')}`)));
 }
@@ -2376,7 +2543,7 @@ function parseCsv(text) {
 }
 
 /**
- * Reads one tab saved as CSV: Lifts (7 columns, or 11 with technique sub-sets), Body_Weight (2), Exercises (header starts Exercise, Primary) or
+ * Reads one tab saved as CSV: Lifts (7 columns, 11 with technique sub-sets, 12 with reps in reserve), Body_Weight (2), Exercises (header starts Exercise, Primary) or
  * Workouts (one column per workout). Any bad row stops that file; exact repeats are skipped. Returns a message.
  */
 function importCsv(text) {
@@ -2387,9 +2554,9 @@ function importCsv(text) {
   if (head[0] !== 'date' && !rows.some(x => isDate(x.r[0]))) return importWorkouts(rows);
   if (!isDate(rows[0].r[0])) rows.shift(); // header row
   if (!rows.length) throw new Error('The file has no data rows.');
-  const width = rows[0].r.length, lifts = width === LIFT_COLS.length || width === LIFT_COLS.length + TECH_COLS.length;
+  const width = rows[0].r.length, lifts = [0, TECH_COLS.length, TECH_COLS.length + 1].includes(width - LIFT_COLS.length);
   if (!lifts && width !== BW_COLS.length) {
-    throw new Error(`Expected ${LIFT_COLS.length} columns (${LIFT_COLS.join(', ')}), those plus ${TECH_COLS.join(', ')}, or ${BW_COLS.length} (${BW_COLS.join(', ')}), but found ${width}.`);
+    throw new Error(`Expected ${LIFT_COLS.length} columns (${LIFT_COLS.join(', ')}), those plus ${TECH_COLS.join(', ')} (and ${RIR_COL}), or ${BW_COLS.length} (${BW_COLS.join(', ')}), but found ${width}.`);
   }
   const errors = [], parsed = [];
   rows.forEach(({ r, line }) => {
@@ -2405,11 +2572,12 @@ function importCsv(text) {
     if (!Number.isInteger(set) || set < 1) return bad(`set "${r[3]}" is not a whole number, 1 or more`);
     if (!Number.isInteger(reps) || reps < 1) return bad(`reps "${r[4]}" is not a whole number, 1 or more`);
     if (typeof wt !== 'number' || wt < 0) return bad(`weight "${r[5]}" is not a number, 0 or more`);
-    const rest = toNum(r[9]), rom = toNum(r[10]);
-    if (!r[8]) return parsed.push([r[0], r[1], r[2], set, reps, wt, r[6]]);
+    const rest = toNum(r[9]), rom = toNum(r[10]), rir = (r[11] || '').toUpperCase().replace(/\s+/g, '').replace('–', '-');
+    if (rir && !okRir(rir)) return bad(`rir "${r[11]}" is not F, 0 to 10, or a range such as 1-2`);
+    if (!r[8]) return parsed.push(liftRow([r[0], r[1], r[2], set, reps, wt, r[6]], null, rir));
     if (!TECH[r[8]] || !SUB.test(r[7])) return bad(`technique "${r[8]}" or sub "${r[7]}" is not one this app writes`);
     if (typeof rest === 'string' && rest || typeof rom === 'string' && rom) return bad(`rest_s "${r[9]}" or rom "${r[10]}" is not a number`);
-    parsed.push([r[0], r[1], r[2], set, reps, wt, r[6], r[7], r[8], rest, rom]);
+    parsed.push(liftRow([r[0], r[1], r[2], set, reps, wt, r[6]], [r[7], r[8], rest, rom], rir));
   });
   if (errors.length) {
     throw new Error(`Nothing imported. ${errors.length} row(s) need fixing: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '; …' : ''}`);
@@ -2560,7 +2728,7 @@ $('bcancel').addEventListener('click', () => { say('bstatus', ''); resetBuild();
 $('hpast').addEventListener('click', () => { setView('Train'); $('tdate').focus(); });
 $('hmore').addEventListener('click', () => { hist.shown += 40; drawHistory(); });
 $('hnew').addEventListener('click', () => exerciseForm({}));
-$('expLifts').addEventListener('click', () => exportCsv('lifts.csv', LIFT_COLS.concat(TECH_COLS), S.lifts.map(r => r.concat('', '', '', '').slice(0, 11))));
+$('expLifts').addEventListener('click', () => exportCsv('lifts.csv', LIFT_COLS.concat(TECH_COLS, RIR_COL), S.lifts.map(r => r.concat('', '', '', '', '').slice(0, 12))));
 $('expBw').addEventListener('click', () => exportCsv('body_weight.csv', BW_COLS, S.bw));
 $('expEx').addEventListener('click', () => exportCsv('exercises.csv', ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic', 'Primary_muscles', 'Secondary_muscles'],
   ALL.filter(e => e.custom).map(e => [e.name, e.primary.join(', '), e.secondary.join(', '), e.equipment === 'none listed' ? '' : e.equipment, e.mechanic || '', e.fine[0].join(', '), e.fine[1].join(', ')])));

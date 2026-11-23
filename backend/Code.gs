@@ -13,7 +13,8 @@ const TABS = {
   Exercises: { cols: ['Exercise', 'Primary', 'Secondary', 'Equipment', 'Mechanic', 'added_by', 'Primary_muscles', 'Secondary_muscles'], text: [[1, 8]] },
   Workouts: { cols: ['profile', 'workout', 'position', 'exercise', 'sets', 'techniques'], text: [[1, 2], [4, 1], [6, 1]] },
   // A row with `technique` filled in is an intensity-technique sub-set of that set; `sub` is its place under the set (2.1 = first one nested under the second).
-  Lifts: { cols: ['profile', 'date', 'workout', 'exercise', 'set', 'reps', 'weight_lb', 'notes', 'sub', 'technique', 'rest_s', 'rom'], text: [[1, 4], [8, 3]] },
+  // rir = reps in reserve, if one was picked: F (failure), 0 to 10, or a range such as 1-2 (kept as text so Sheets never reads it as a date).
+  Lifts: { cols: ['profile', 'date', 'workout', 'exercise', 'set', 'reps', 'weight_lb', 'notes', 'sub', 'technique', 'rest_s', 'rom', 'rir'], text: [[1, 4], [8, 3], [13, 1]] },
   Body_Weight: { cols: ['profile', 'date', 'body_weight_lb'], text: [[1, 2]] },
   Config: { cols: ['key', 'value'], text: [[1, 2]] },
   // The Feed: a shared session (one per profile, date and workout), its reactions and its comments. Everyone signed in to this log can read them.
@@ -31,6 +32,7 @@ const FINE = ['abductors', 'adductors', 'neck', 'anterior_deltoid', 'biceps_brac
 const EQUIP = ['bands', 'barbell', 'body only', 'cable', 'dumbbell', 'e-z curl bar', 'exercise ball', 'foam roll', 'kettlebells', 'machine', 'medicine ball', 'none listed', 'other'];
 const MECHANICS = ['', 'compound', 'isolation'];
 const TECHNIQUES = ['partial', 'myo', 'rest-pause', 'drop'], SUB = /^[1-9](\.[1-9]){0,2}$/;
+const RIRS = ['F', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], RIR_RE = /^(F|10|[0-9])(-(10|[0-9]))?$/; // same as index.html
 const FORMULA_START = /^[=+\-@]/; // Sheets would run these as formulas, so they are stored behind an apostrophe
 const MAX = { ops: 200, rows: 20000, name: 80, notes: 500, workouts: 60, items: 40, sets: 10, caption: 280, comment: 500, feed: 30 };
 const ID = /^[a-z0-9]{8,40}$/; // post and comment ids, made by the page so a retried request never doubles anything
@@ -246,20 +248,29 @@ function label(v, what, max, required) {
   return s;
 }
 
-/** Client lift row: [date, workout, exercise, set, reps, weight, notes], and for a technique sub-set also [sub, technique, rest_s, rom]. */
+/**
+ * Client lift row: [date, workout, exercise, set, reps, weight, notes], for a technique sub-set also [sub, technique, rest_s, rom],
+ * and with reps in reserve a 12th value, rir (the technique values blank on a straight set). Same shape as liftRow in index.html,
+ * so the exact-repeat check matches on both sides.
+ */
 function cleanLift(r) {
-  if (!Array.isArray(r) || (r.length !== 7 && r.length !== 11)) throw fail('A set row does not have 7 or 11 values.');
+  if (!Array.isArray(r) || [7, 11, 12].indexOf(r.length) < 0) throw fail('A set row does not have 7, 11 or 12 values.');
   if (!isDate(r[0])) throw fail('"' + r[0] + '" is not a yyyy-mm-dd date.');
   if (!whole(r[3], 1, 99)) throw fail('Set "' + r[3] + '" is not a whole number, 1 or more.');
   if (!whole(r[4], 1, 9999)) throw fail('Reps "' + r[4] + '" is not a whole number, 1 or more.');
   if (typeof r[5] !== 'number' || !(r[5] >= 0) || r[5] > 99999) throw fail('Weight "' + r[5] + '" is not a number, 0 or more.');
   const row = [r[0], label(r[1], 'Workout name', MAX.name), label(r[2], 'Exercise', MAX.name, true), r[3], r[4], r[5], label(r[6], 'Notes', MAX.notes)];
   if (r.length === 7) return row;
+  if (r.length === 12) {
+    const m = RIR_RE.exec(r[11]);
+    if (!m || (m[3] && RIRS.indexOf(m[1]) >= RIRS.indexOf(m[3]))) throw fail('Reps in reserve "' + r[11] + '" is not F, 0 to 10, or a range such as 1-2.');
+    if (r[7] === '' && r[8] === '' && r[9] === '' && r[10] === '') return row.concat(['', '', '', '', r[11]]);
+  }
   const blankOr = (v, lo, hi) => v === '' || (typeof v === 'number' && v >= lo && v <= hi);
   if (TECHNIQUES.indexOf(r[8]) < 0 || typeof r[7] !== 'string' || !SUB.test(r[7])) throw fail('Technique "' + r[8] + '" at "' + r[7] + '" is not a sub-set this log knows.');
   if (!blankOr(r[9], 0, 3600)) throw fail('Rest "' + r[9] + '" is not a number of seconds.');
   if (!blankOr(r[10], 0.01, 1)) throw fail('Range of motion "' + r[10] + '" is not a share of the range, up to 1.');
-  return row.concat([r[7], r[8], r[9], r[10]]);
+  return row.concat([r[7], r[8], r[9], r[10]], r.length === 12 ? [r[11]] : []);
 }
 /** A saved workout's planned sub-sets for an exercise's last set: [{ t, kids }], up to 3 levels deep and 9 per level. */
 function cleanTech(list, depth) {
@@ -348,7 +359,14 @@ function postFromSheet(r) {
 function liftFromSheet(r) {
   try {
     const row = [str(r[1]), str(r[2]), str(r[3]), num(r[4]), num(r[5]), num(r[6]), str(r[7])], opt = v => (str(v) === '' ? '' : num(v));
-    return cleanLift(key(r[9]) ? row.concat([str(r[8]), key(r[9]), opt(r[10]), opt(r[11])]) : row);
+    // A hand-typed rir the log cannot read is left off, so the set itself is still kept.
+    const tech = key(r[9]) ? [str(r[8]), key(r[9]), opt(r[10]), opt(r[11])] : ['', '', '', ''], rir = str(r[12]).toUpperCase().replace(/\s+/g, '').replace('\u2013', '-');
+    if (rir) {
+      try {
+        return cleanLift(row.concat(tech, [rir]));
+      } catch (err) { /* fall through without it */ }
+    }
+    return cleanLift(key(r[9]) ? row.concat(tech) : row);
   } catch (err) {
     return null;
   }
@@ -400,7 +418,8 @@ function sync(req) {
       seen[kind].add(k);
       return true;
     });
-    appendRows(tabName, fresh.map(r => [profile.name].concat(r, '', '', '', '').slice(0, TABS[tabName].cols.length))); // a straight set leaves the technique columns blank
+    const width = TABS[tabName].cols.length; // a straight set leaves the technique columns blank, and a set without RIR the rir column
+    appendRows(tabName, fresh.map(r => { const row = [profile.name].concat(r); while (row.length < width) row.push(''); return row; }));
     fresh.forEach(r => have.push(r));
   };
   const ownerOf = name => {

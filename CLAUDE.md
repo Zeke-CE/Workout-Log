@@ -51,14 +51,14 @@ Op types (`t`): `lifts`, `bw`, `workouts`, `exercise`, `delExercise`, `delDay`, 
 
 ### Data shapes are positional arrays
 
-Lift rows are arrays: `LIFT_COLS = [date, workout, exercise, set, reps, weight, notes]`. A sub-set row appends `TECH_COLS = [sub, technique, rest_s, rom]` (11 values in total). A straight set stays 7 long, and the dedup check relies on this. In the Sheet, each row carries a leading `profile` column (`TABS` in `Code.gs` defines the headers). Changing a column order or length affects the dedup check, the CSV import/export (`toCsv`/`importCsv`), and `cleanLift`/`liftFromSheet` on the server. A workout's planned sub-sets are stored as JSON in the `techniques` column of `Workouts`.
+Lift rows are arrays: `LIFT_COLS = [date, workout, exercise, set, reps, weight, notes]`. A sub-set row appends `TECH_COLS = [sub, technique, rest_s, rom]` (11 values in total). A set with reps in reserve appends `rir` as a 12th value (`F`, `0`–`10` or a range like `1-2`), with the technique values blank on a straight set. A straight set without RIR stays 7 long. `liftRow()` in `index.html` and `cleanLift` in `Code.gs` build this one canonical shape, and the dedup check relies on it. In the Sheet, each row carries a leading `profile` column (`TABS` in `Code.gs` defines the headers). Changing a column order or length affects the dedup check, the CSV import/export (`toCsv`/`importCsv`), and `cleanLift`/`liftFromSheet` on the server. A workout's planned sub-sets are stored as JSON in the `techniques` column of `Workouts`.
 
 ### Backend specifics
 
 - `doPost` dispatches on `req.action`, one of `signup`, `login` or `sync`. Auth uses a signed token (`tokenFor`/`whoIs`) whose secret is kept in Script Properties. Profiles store a salt and a passcode hash.
 - `setup()` is safe to rerun. It creates or repairs headers and keeps existing rows, so new columns are added by extending `TABS` and running `setup`.
 - All input passes through the `clean*`/`label` validators, which enforce the limits in `MAX`. Strings that start with `= + - @` are escaped (`FORMULA_START`) to prevent formula injection. The frontend applies the same check when it exports CSV.
-- `MUSCLES`, `EQUIP`, `MECHANICS`, `TECHNIQUES` and `SUB` are duplicated in both files and must stay in sync. `FINE` in `Code.gs` must match the keys of `XWALK` in `index.html`: these are the exact muscles an added exercise stores (`ex.fine = [primary, secondary]`, the `Primary_muscles`/`Secondary_muscles` columns). Its muscle groups (`primary`/`secondary`) are derived from them by the form.
+- `MUSCLES`, `EQUIP`, `MECHANICS`, `TECHNIQUES`, `SUB` and the RIR scale (`RIRS`, `RIR_RE`) are duplicated in both files and must stay in sync. `FINE` in `Code.gs` must match the keys of `XWALK` in `index.html`: these are the exact muscles an added exercise stores (`ex.fine = [primary, secondary]`, the `Primary_muscles`/`Secondary_muscles` columns). Its muscle groups (`primary`/`secondary`) are derived from them by the form.
 
 ### Constraints
 

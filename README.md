@@ -86,6 +86,31 @@ straight sets. A workout's planned sub-sets are kept as JSON in the
 `techniques` column of `Workouts`. CSV files exported before these columns
 existed still import.
 
+## Reps in reserve (RIR)
+
+On Train, each set has an **RIR** box between reps and the note. Tap it to pick
+how many more good reps you had left: **Fail** (you tried a rep and could not
+finish it), **0** (the last rep was complete but another was not possible),
+**1**, **2**, and so on up to **10**. Tap two ratings for a range, such as
+1–2. **What do these ratings mean?** in the picker explains the scale and the
+research behind it (Zourdos et al. 2016; Halperin et al. 2022; Refalo et al.
+2023, 2024; Robinson et al. 2024). Last session's rating shows in grey until
+you pick one, as the other boxes do.
+
+Under the rating, the box shows how far the set was from your **fresh max**
+at that weight, meaning the most reps you have done at that weight as the
+first set of the exercise (today's first set counts for the later sets). For
+example, if your best first set of preacher curls at 100 lb is 5 reps and your
+second set today is 2 reps, it reads "3 from max". With no first set at that
+exact weight, the best first set (of 12 reps or fewer) gives an Epley one-rep
+max, `weight × (1 + reps ÷ 30)`, which predicts the reps at the new weight; the
+line is then marked ≈. Assisted lifts and weight 0 are compared only at an
+exact weight. The comparison is worked out on the page and not stored.
+
+The rating is stored in a `rir` column at the end of `Lifts`: `F`, `0` to `10`,
+or a range such as `1-2` (lower first), blank when none was picked. Sub-set
+rows have no rating.
+
 ## Feed
 
 The Feed tab lists sessions that people chose to share, newest first. Everyone
@@ -233,6 +258,21 @@ saved workouts.
    headers to `Lifts` and `techniques` to `Workouts`. Existing rows are kept.
 3. **Deploy → Manage deployments → Edit**, choose **New version**, deploy.
 4. Publish the new `index.html`.
+
+### Updating a deployment for RIR
+
+Do this before publishing the new `index.html`. An older backend rejects any
+set saved with an RIR rating.
+
+1. Paste the new [`backend/Code.gs`](backend/Code.gs) into the Apps Script
+   editor.
+2. Run `setup` once. It adds the `rir` header to `Lifts`, kept as plain text.
+   Existing rows are kept. (The new backend reads the 13th column, so it needs
+   `setup` before it can sync.)
+3. **Deploy → Manage deployments → Edit**, choose **New version**, deploy.
+4. Publish the new `index.html`.
+5. Check: save a set with RIR 1–2, reload, and confirm the grey 1–2 shows on
+   that set next session and `1-2` is in the `rir` cell.
 
 ### Updating a deployment for the Feed
 
